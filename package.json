@@ -1,0 +1,35 @@
+{
+  "name": "homebridge-nuki-mqtt-events",
+  "displayName": "Nuki MQTT Events",
+  "version": "1.0.0",
+  "description": "Momentary HomeKit switches that pulse when a Nuki lock is opened by fingerprint or keypad code (via the Nuki local MQTT API).",
+  "main": "index.js",
+  "author": "Oren Asher",
+  "license": "MIT",
+  "keywords": [
+    "homebridge-plugin",
+    "nuki",
+    "mqtt",
+    "keypad",
+    "fingerprint",
+    "homekit"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orenasher/homebridge-nuki-mqtt-events.git"
+  },
+  "bugs": {
+    "url": "https://github.com/orenasher/homebridge-nuki-mqtt-events/issues"
+  },
+  "funding": {
+    "type": "paypal",
+    "url": "https://paypal.me/orenasher"
+  },
+  "engines": {
+    "homebridge": "^1.6.0 || ^2.0.0-beta.0",
+    "node": "^18.20.0 || ^20.15.0 || ^22"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.0"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "pluginAlias": "NukiMqttEvents",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Momentary switches that turn on for a moment when the Nuki lock is opened by fingerprint or keypad code. Requires Nuki MQTT enabled in the Nuki app.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": { "title": "Name", "type": "string", "default": "Nuki MQTT Events" },
+      "host": { "title": "MQTT host", "type": "string", "required": true, "placeholder": "10.167.175.232" },
+      "port": { "title": "MQTT port", "type": "integer", "default": 1883 },
+      "username": { "title": "MQTT username", "type": "string" },
+      "password": { "title": "MQTT password", "type": "string" },
+      "deviceId": { "title": "Nuki device ID", "type": "string", "required": true, "placeholder": "4E2CC127", "description": "Shown in the MQTT topics, e.g. nuki/4E2CC127/state" },
+      "topicPrefix": { "title": "Topic prefix", "type": "string", "default": "nuki" },
+      "resetMs": { "title": "Switch on-time (ms)", "type": "integer", "default": 1000, "minimum": 200 },
+      "logEvents": { "title": "Log every lock event", "type": "boolean", "default": true },
+      "switches": {
+        "title": "Switches",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "title": "Switch name", "type": "string", "required": true, "default": "Nuki Fingerprint" },
+            "sources": {
+              "title": "Triggered by",
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "enum": ["fingerprint", "code"] },
+              "default": ["fingerprint"]
+            },
+            "actions": {
+              "title": "Lock actions",
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "enum": ["unlock", "unlatch", "locknGoUnlatch", "lock", "locknGo"] },
+              "default": ["unlock", "unlatch", "locknGoUnlatch"]
+            },
+            "codeIds": {
+              "title": "Only these Code IDs (optional, per person)",
+              "type": "array",
+              "items": { "type": "integer" },
+              "description": "Leave empty for everyone. Code IDs appear in the Homebridge log."
+            }
+          }
+        }
+      }
+    }
+  }
+}

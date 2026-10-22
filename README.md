@@ -4,16 +4,22 @@ Momentary HomeKit switches that turn **on for ~1 second** whenever a Nuki Smart 
 
 Typical use: an Apple Home automation *"When Nuki Fingerprint turns on → set Security System to Off"* — so the alarm is disarmed only by fingerprint/code, never when the door is opened from inside or from the app.
 
-## Requirements
-- Nuki Smart Lock with MQTT enabled in the Nuki app (Features & Configuration → Smart Home → MQTT)
-- An MQTT broker (e.g. Home Assistant's Mosquitto add-on)
+## Fully standalone (v1.1+)
+The plugin includes its own **built-in MQTT broker**. No Home Assistant, Mosquitto or other script is needed:
+
+1. In the Nuki app: *Features & Configuration → Smart Home → MQTT* → Host = the IP of your Homebridge server, plus the username/password you set in the plugin.
+2. That's it — the switch reacts directly.
+
+Home Assistant can still use the lock: point Home Assistant's MQTT integration at the Homebridge server's IP (port 1883, same login). Auto-discovery keeps working, and retained messages are saved across restarts.
+
+Prefer an existing broker? Set **MQTT broker → External** and enter its host.
 
 ## Config
 ```json
 {
   "platform": "NukiMqttEvents",
-  "host": "10.167.175.232",
-  "port": 1883,
+  "brokerMode": "embedded",
+  "brokerPort": 1883,
   "username": "nuki",
   "password": "********",
   "deviceId": "4E2CC127",

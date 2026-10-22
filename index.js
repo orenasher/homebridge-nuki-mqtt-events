@@ -1,5 +1,5 @@
 'use strict';
-const mqtt = require('mqtt');
+const { MiniBroker, topicMatches } = require('./broker');
 
 const PLUGIN = 'homebridge-nuki-mqtt-events';
 const PLATFORM = 'NukiMqttEvents';
@@ -18,12 +18,16 @@ class NukiMqttEvents {
     this.api = api;
     this.cached = new Map();
     this.switches = [];
-    if (!this.config.deviceId) {
-      log.error('Missing "deviceId" (e.g. 4E2CC127). Plugin disabled.');
-      return;
-    }
-    api.on('didFinishLaunching', () => { this.setup(); this.connect(); });
-    api.on('shutdown', () => this.client && this.client.end(true));
+    this.mode = this.config.brokerMode || (this.config.host ? 'external' : 'embedded');
+    this.deviceKey = this.config.deviceId || 'nuki';
+    api.on('didFinishLaunching', () => {
+      this.setup();
+      if (this.mode === 'embedded') this.startBroker(); else this.connect();
+    });
+    api.on('shutdown', () => {
+      if (this.client) this.client.end(true);
+      if (this.broker) this.broker.close();
+    });
   }
 
   configureAccessory(acc) { this.cached.set(acc.UUID, acc); }
@@ -36,7 +40,7 @@ class NukiMqttEvents {
     const keep = new Set();
 
     for (const def of defs) {
-      const id = uuid.generate(`${PLATFORM}:${this.config.deviceId}:${def.name}`);
+      const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:${def.name}`);
       keep.add(id);
       let acc = this.cached.get(id);
       if (!acc) {
@@ -46,7 +50,7 @@ class NukiMqttEvents {
       acc.getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, 'Oren Asher')
         .setCharacteristic(Characteristic.Model, 'Nuki MQTT Event Switch')
-        .setCharacteristic(Characteristic.SerialNumber, `${this.config.deviceId}-${def.name}`);
+        .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-${def.name}`);
       const svc = acc.getService(Service.Switch) || acc.addService(Service.Switch, def.name);
       const sw = {
         def,
@@ -55,7 +59,7 @@ class NukiMqttEvents {
         timer: null,
         sources: (def.sources || ['fingerprint']).map((s) => SOURCES[s]).filter((s) => s !== undefined),
         actions: (def.actions || ['unlock', 'unlatch', 'locknGoUnlatch']).map((a) => ACTIONS[a]).filter(Boolean),
-        codeIds: (def.codeIds || []).map(Number),
+        codeIds: (def.codeIds || []).filter((x) => x !== null && x !== '' && Number(x) > 0).map(Number),
       };
       svc.getCharacteristic(Characteristic.On)
         .onGet(() => sw.on)
@@ -67,10 +71,49 @@ class NukiMqttEvents {
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
   }
 
+  eventTopic() {
+    return `${this.config.topicPrefix || 'nuki'}/${this.config.deviceId || '+'}/lockActionEvent`;
+  }
+
+  async startBroker() {
+    const c = this.config;
+    const port = Number(c.brokerPort) || 1883;
+    const filter = this.eventTopic();
+    this.broker = new MiniBroker({ username: c.username, password: c.password });
+    const fs = require('fs');
+    const store = require('path').join(this.api.user.storagePath(), 'nuki-mqtt-events-retained.json');
+    try {
+      const saved = JSON.parse(fs.readFileSync(store, 'utf8'));
+      for (const [t, b64] of Object.entries(saved)) this.broker.retained.set(t, Buffer.from(b64, 'base64'));
+    } catch (e) { /* first run */ }
+    let saveTimer = null;
+    this.broker.on('retainChanged', () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        const out = {};
+        for (const [t, b] of this.broker.retained) out[t] = b.toString('base64');
+        fs.writeFile(store, JSON.stringify(out), () => {});
+      }, 2000);
+    });
+    this.broker.on('warn', (m) => this.log.warn(`Broker: ${m}`));
+    this.broker.on('clientConnected', (cl) => this.log.info(`Broker: client "${cl.id}" connected from ${cl.socket.remoteAddress}`));
+    this.broker.on('clientDisconnected', (cl) => this.log.info(`Broker: client "${cl.id}" disconnected`));
+    this.broker.on('message', (topic, payload) => {
+      if (topicMatches(filter, topic)) this.handle(payload.toString().trim());
+    });
+    try {
+      await this.broker.listen(port, '0.0.0.0');
+      this.log.info(`Built-in MQTT broker listening on port ${port}${c.username ? ' (login required)' : ' (no login)'} — waiting for ${filter}`);
+    } catch (e) {
+      this.log.error(`Could not start the built-in MQTT broker on port ${port}: ${e.message}. Is another MQTT broker already using this port?`);
+    }
+  }
+
   connect() {
+    const mqtt = require('mqtt');
     const c = this.config;
     const url = `mqtt://${c.host || '127.0.0.1'}:${c.port || 1883}`;
-    const topic = `${c.topicPrefix || 'nuki'}/${c.deviceId}/lockActionEvent`;
+    const topic = this.eventTopic();
     this.client = mqtt.connect(url, {
       username: c.username || undefined,
       password: c.password || undefined,

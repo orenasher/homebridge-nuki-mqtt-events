@@ -67,7 +67,7 @@
         "title": "Nuki device ID",
         "type": "string",
         "placeholder": "4E2CC127",
-        "description": "Shown in the MQTT topics, e.g. nuki/4E2CC127/state. Optional with the built-in broker (any Nuki is accepted)."
+        "description": "Shown in the MQTT topics, e.g. nuki/4E2CC127/state. Optional with the built-in broker (learned from the first message)."
       },
       "topicPrefix": {
         "title": "Topic prefix",
@@ -140,6 +140,71 @@
               },
               "description": "Leave empty for everyone. Code IDs appear in the Homebridge log."
             }
+          }
+        }
+      },
+      "doorLock": {
+        "title": "Matter door lock with door position (for iOS 27.2 \"Lock After Closing\")",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "title": "Enable the Matter door lock",
+            "type": "boolean",
+            "default": false,
+            "description": "Runs a standalone Matter lock (own pairing code) that reports the door position. Lock/unlock commands go to the Nuki over MQTT — enable lock actions in the Nuki app's MQTT settings."
+          },
+          "name": {
+            "title": "Lock name",
+            "type": "string",
+            "default": "Front Door"
+          },
+          "doorSwitchName": {
+            "title": "Door-state switch name",
+            "type": "string",
+            "default": "Door Open",
+            "description": "A HomeKit switch the door position comes from. Create two Home automations: door sensor opens → turn this switch on; door sensor closes → turn it off."
+          },
+          "lockAfterCloseSeconds": {
+            "title": "Lock after closing (seconds, plugin fallback)",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional. Lock this many seconds after the door closes while unlocked. Leave empty to rely only on the setting in the Home app (Matter auto-relock time)."
+          },
+          "matterPort": {
+            "title": "Matter port",
+            "type": "integer",
+            "default": 5560
+          },
+          "passcode": {
+            "title": "Matter setup passcode",
+            "type": "integer",
+            "default": 20262027,
+            "description": "8 digits. Changing it after pairing has no effect."
+          },
+          "discriminator": {
+            "title": "Matter discriminator",
+            "type": "integer",
+            "default": 3127,
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "actionTimeout": {
+            "title": "Lock action timeout (s)",
+            "type": "integer",
+            "default": 30,
+            "minimum": 5
+          },
+          "matterLogLevel": {
+            "title": "Matter log level",
+            "type": "string",
+            "default": "warn",
+            "enum": [
+              "error",
+              "warn",
+              "notice",
+              "info",
+              "debug"
+            ]
           }
         }
       }

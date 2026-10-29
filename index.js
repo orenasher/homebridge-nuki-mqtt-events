@@ -9,6 +9,12 @@ const PLATFORM = 'NukiMqttEvents';
 const SOURCES = { backkey: 0, code: 1, fingerprint: 2 };
 const ACTIONS = { unlock: 1, lock: 2, unlatch: 3, locknGo: 4, locknGoUnlatch: 5 };
 
+// Nuki MQTT "state" → Matter LockState (0 not fully locked, 1 locked, 2 unlocked).
+// Transitional states (2 unlocking, 4 locking, 7 unlatching) are ignored.
+const NUKI_TO_MATTER = { 1: 1, 3: 2, 5: 2, 6: 2, 254: 0 };
+const NUKI_STATE_NAMES = { 0: 'uncalibrated', 1: 'locked', 2: 'unlocking', 3: 'unlocked', 4: 'locking', 5: 'unlatched', 6: "unlocked (lock 'n' go)", 7: 'unlatching', 253: 'boot run', 254: 'motor blocked', 255: 'undefined' };
+const UNLOCKED_STATES = [3, 5, 6];
+
 module.exports = (api) => api.registerPlatform(PLUGIN, PLATFORM, NukiMqttEvents);
 
 class NukiMqttEvents {
@@ -20,13 +26,24 @@ class NukiMqttEvents {
     this.switches = [];
     this.mode = this.config.brokerMode || (this.config.host ? 'external' : 'embedded');
     this.deviceKey = this.config.deviceId || 'nuki';
+    this.prefix = this.config.topicPrefix || 'nuki';
+    this.nukiId = this.config.deviceId || null; // learned from incoming topics when not configured
+    this.nukiState = null;
+    this.stateWaiters = new Set();
+    this.lockCfg = this.config.doorLock && this.config.doorLock.enabled ? this.config.doorLock : null;
+    this.doorOpen = null;
+    this.relockTimer = null;
+    this.matter = null;
     api.on('didFinishLaunching', () => {
       this.setup();
       if (this.mode === 'embedded') this.startBroker(); else this.connect();
+      if (this.lockCfg) this.startLock();
     });
     api.on('shutdown', () => {
+      clearTimeout(this.relockTimer);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
+      if (this.matter) this.matter.close().catch(() => {});
     });
   }
 
@@ -67,12 +84,168 @@ class NukiMqttEvents {
       this.switches.push(sw);
     }
 
+    if (this.lockCfg) keep.add(this.setupDoorSwitch());
+
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
   }
 
+  // ---------- Door state input (fed by a Home automation from any door sensor, e.g. Aqara) ----------
+
+  setupDoorSwitch() {
+    const { Service, Characteristic, uuid } = this.api.hap;
+    const name = this.lockCfg.doorSwitchName || 'Door Open';
+    const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:door-switch`);
+    let acc = this.cached.get(id);
+    if (!acc) {
+      acc = new this.api.platformAccessory(name, id);
+      this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
+    }
+    acc.getService(Service.AccessoryInformation)
+      .setCharacteristic(Characteristic.Manufacturer, 'Oren Asher')
+      .setCharacteristic(Characteristic.Model, 'Door State Input')
+      .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-door`);
+    const svc = acc.getService(Service.Switch) || acc.addService(Service.Switch, name);
+    this.doorAcc = acc;
+    this.doorSvc = svc;
+    this.doorOpen = typeof acc.context.doorOpen === 'boolean' ? acc.context.doorOpen : false;
+    svc.getCharacteristic(Characteristic.On)
+      .onGet(() => this.doorOpen === true)
+      .onSet((v) => this.setDoor(!!v, 'Home automation'));
+    return id;
+  }
+
+  setDoor(open, why) {
+    const changed = open !== this.doorOpen;
+    this.doorOpen = open;
+    if (this.doorAcc) this.doorAcc.context.doorOpen = open;
+    if (!changed) return;
+    this.log.info(`Door ${open ? 'opened' : 'closed'} (${why})`);
+    if (this.matter) this.matter.setDoorOpen(open).catch((e) => this.log.warn(`Matter lock: could not update door state: ${e.message}`));
+    clearTimeout(this.relockTimer);
+    this.relockTimer = null;
+    if (!open) this.scheduleLockAfterClose();
+  }
+
+  // Lock after the door closes. Delay = the Matter auto-relock time set from Home, otherwise the plugin setting.
+  scheduleLockAfterClose() {
+    if (!UNLOCKED_STATES.includes(this.nukiState)) return;
+    const fromHome = this.matter ? this.matter.autoRelockTime() : 0;
+    const own = this.lockCfg.lockAfterCloseSeconds;
+    let delay = null;
+    if (fromHome > 0) delay = fromHome;
+    else if (own !== undefined && own !== null && own !== '' && Number(own) >= 0) delay = Number(own);
+    if (delay === null) return;
+    this.log.info(`Door closed while unlocked — locking in ${delay} s`);
+    this.relockTimer = setTimeout(() => {
+      this.relockTimer = null;
+      if (this.doorOpen) return;
+      if (!UNLOCKED_STATES.includes(this.nukiState)) return;
+      this.actuate('lock', 'lock after closing').catch((e) => this.log.warn(`Lock after closing failed: ${e.message}`));
+    }, delay * 1000);
+  }
+
+  // ---------- Matter lock ----------
+
+  async startLock() {
+    const c = this.lockCfg;
+    const path = require('path');
+    try {
+      const { startMatterLock } = require('./matterLock');
+      this.matter = await startMatterLock({
+        log: this.log,
+        actuate: (a, why) => this.actuate(a, why),
+        isDoorOpen: () => this.doorOpen,
+      }, {
+        storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
+        port: Number(c.matterPort) || 5560,
+        passcode: Number(c.passcode) || 20262027,
+        discriminator: Number(c.discriminator) || 3127,
+        name: c.name || 'Front Door',
+        serial: String(this.config.deviceId || 'nuki-lock'),
+        lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
+        doorOpen: this.doorOpen,
+        matterLogLevel: c.matterLogLevel,
+      });
+      if (this.nukiState !== null) this.pushLockState();
+    } catch (e) {
+      this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
+    }
+  }
+
+  pushLockState() {
+    const s = NUKI_TO_MATTER[this.nukiState];
+    if (s === undefined || !this.matter) return;
+    this.matter.setLockState(s).catch((e) => this.log.warn(`Matter lock: could not update lock state: ${e.message}`));
+  }
+
+  // Send a lock action to the Nuki and wait until it reports the target state.
+  actuate(action, why) {
+    if (!this.nukiId) return Promise.reject(new Error('Nuki device ID not known yet (no MQTT message received from the lock)'));
+    const done = action === 'lock' ? (s) => s === 1 : (s) => UNLOCKED_STATES.includes(s);
+    if (done(this.nukiState)) return Promise.resolve();
+    const code = action === 'lock' ? ACTIONS.lock : ACTIONS.unlock;
+    const topic = `${this.prefix}/${this.nukiId}/lockAction`;
+    this.log.info(`${action === 'lock' ? 'Locking' : 'Unlocking'} Nuki (${why}) → ${topic} = ${code}`);
+    this.publish(topic, String(code));
+    const timeoutMs = (Number(this.lockCfg && this.lockCfg.actionTimeout) || 30) * 1000;
+    return new Promise((resolve, reject) => {
+      const w = {
+        check: (s) => {
+          if (done(s)) { clearTimeout(w.timer); this.stateWaiters.delete(w); resolve(); return; }
+          if (s === 254) { clearTimeout(w.timer); this.stateWaiters.delete(w); reject(new Error('Nuki motor blocked')); }
+        },
+      };
+      w.timer = setTimeout(() => {
+        this.stateWaiters.delete(w);
+        reject(new Error(`Nuki did not report ${action === 'lock' ? 'locked' : 'unlocked'} within ${timeoutMs / 1000} s — is "lock actions" allowed in the Nuki MQTT settings?`));
+      }, timeoutMs);
+      this.stateWaiters.add(w);
+    });
+  }
+
+  onNukiState(raw) {
+    const s = Number(raw);
+    if (!Number.isFinite(s) || s === this.nukiState) return;
+    this.nukiState = s;
+    this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
+    for (const w of [...this.stateWaiters]) w.check(s);
+    this.pushLockState();
+    if (s === 1) { clearTimeout(this.relockTimer); this.relockTimer = null; }
+  }
+
+  // ---------- MQTT ----------
+
   eventTopic() {
-    return `${this.config.topicPrefix || 'nuki'}/${this.config.deviceId || '+'}/lockActionEvent`;
+    return `${this.prefix}/${this.config.deviceId || '+'}/lockActionEvent`;
+  }
+
+  stateTopic() {
+    return `${this.prefix}/${this.config.deviceId || '+'}/state`;
+  }
+
+  learnId(topic) {
+    if (this.nukiId) return;
+    const parts = topic.split('/');
+    if (parts.length >= 3 && parts[0] === this.prefix) {
+      this.nukiId = parts[1];
+      this.log.info(`Nuki device ID: ${this.nukiId}`);
+    }
+  }
+
+  onMqtt(topic, payload, retained) {
+    if (topicMatches(this.eventTopic(), topic)) {
+      this.learnId(topic);
+      if (!retained) this.handle(payload);
+    } else if (topicMatches(this.stateTopic(), topic)) {
+      this.learnId(topic);
+      this.onNukiState(payload);
+    }
+  }
+
+  publish(topic, payload) {
+    if (this.broker) this.broker.publish(topic, Buffer.from(payload), false, null);
+    else if (this.client) this.client.publish(topic, payload, { qos: 1 });
   }
 
   async startBroker() {
@@ -86,6 +259,10 @@ class NukiMqttEvents {
       const saved = JSON.parse(fs.readFileSync(store, 'utf8'));
       for (const [t, b64] of Object.entries(saved)) this.broker.retained.set(t, Buffer.from(b64, 'base64'));
     } catch (e) { /* first run */ }
+    // Last known lock state from before the restart
+    for (const [t, b] of this.broker.retained) {
+      if (topicMatches(this.stateTopic(), t)) { this.learnId(t); this.onNukiState(b.toString().trim()); }
+    }
     let saveTimer = null;
     this.broker.on('retainChanged', () => {
       clearTimeout(saveTimer);
@@ -98,8 +275,9 @@ class NukiMqttEvents {
     this.broker.on('warn', (m) => this.log.warn(`Broker: ${m}`));
     this.broker.on('clientConnected', (cl) => this.log.info(`Broker: client "${cl.id}" connected from ${cl.socket.remoteAddress}`));
     this.broker.on('clientDisconnected', (cl) => this.log.info(`Broker: client "${cl.id}" disconnected`));
-    this.broker.on('message', (topic, payload) => {
-      if (topicMatches(filter, topic)) this.handle(payload.toString().trim());
+    this.broker.on('message', (topic, payload, from) => {
+      if (from === null) return; // our own publishes
+      this.onMqtt(topic, payload.toString().trim(), false);
     });
     try {
       await this.broker.listen(port, '0.0.0.0');
@@ -113,7 +291,8 @@ class NukiMqttEvents {
     const mqtt = require('mqtt');
     const c = this.config;
     const url = `mqtt://${c.host || '127.0.0.1'}:${c.port || 1883}`;
-    const topic = this.eventTopic();
+    const topics = [this.eventTopic()];
+    if (this.lockCfg) topics.push(this.stateTopic());
     this.client = mqtt.connect(url, {
       username: c.username || undefined,
       password: c.password || undefined,
@@ -121,13 +300,12 @@ class NukiMqttEvents {
       reconnectPeriod: 5000,
     });
     this.client.on('connect', () => {
-      this.log.info(`Connected to ${url}, listening on ${topic}`);
-      this.client.subscribe(topic, { qos: 0 });
+      this.log.info(`Connected to ${url}, listening on ${topics.join(', ')}`);
+      this.client.subscribe(topics, { qos: 0 });
     });
     this.client.on('error', (e) => this.log.warn('MQTT error:', e.message));
-    this.client.on('message', (_t, buf, packet) => {
-      if (packet.retain) return; // ignore old retained events after reconnect
-      this.handle(buf.toString().trim());
+    this.client.on('message', (topic, buf, packet) => {
+      this.onMqtt(topic, buf.toString().trim(), !!packet.retain);
     });
   }
 

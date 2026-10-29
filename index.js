@@ -122,26 +122,38 @@ class NukiMqttEvents {
     if (!changed) return;
     this.log.info(`Door ${open ? 'opened' : 'closed'} (${why})`);
     if (this.matter) this.matter.setDoorOpen(open).catch((e) => this.log.warn(`Matter lock: could not update door state: ${e.message}`));
-    clearTimeout(this.relockTimer);
-    this.relockTimer = null;
-    if (!open) this.scheduleLockAfterClose();
+    if (open) {
+      if (this.relockTimer) this.log.info('Door opened — auto-lock paused until it closes');
+      clearTimeout(this.relockTimer);
+      this.relockTimer = null;
+    } else {
+      this.armRelock('door closed');
+    }
   }
 
-  // Lock after the door closes. Delay = the Matter auto-relock time set from Home, otherwise the plugin setting.
-  scheduleLockAfterClose() {
-    if (!UNLOCKED_STATES.includes(this.nukiState)) return;
+  // Auto-lock: the timer starts when the lock is unlocked (by any means — app, keypad, fingerprint, Home)
+  // and restarts whenever the door closes. It never locks while the door is open.
+  // Delay = the auto-lock time set in the Home app (Matter autoRelockTime), otherwise the plugin setting.
+  relockDelay() {
     const fromHome = this.matter ? this.matter.autoRelockTime() : 0;
-    const own = this.lockCfg.lockAfterCloseSeconds;
-    let delay = null;
-    if (fromHome > 0) delay = fromHome;
-    else if (own !== undefined && own !== null && own !== '' && Number(own) >= 0) delay = Number(own);
+    if (fromHome > 0) return fromHome;
+    const own = this.lockCfg && this.lockCfg.lockAfterCloseSeconds;
+    if (own !== undefined && own !== null && own !== '' && Number(own) >= 0) return Number(own);
+    return null;
+  }
+
+  armRelock(why) {
+    clearTimeout(this.relockTimer);
+    this.relockTimer = null;
+    if (!this.lockCfg || !UNLOCKED_STATES.includes(this.nukiState)) return;
+    if (this.doorOpen === true) { this.log.info(`Unlocked (${why}) — will auto-lock after the door closes`); return; }
+    const delay = this.relockDelay();
     if (delay === null) return;
-    this.log.info(`Door closed while unlocked — locking in ${delay} s`);
+    this.log.info(`Auto-lock in ${delay} s (${why})`);
     this.relockTimer = setTimeout(() => {
       this.relockTimer = null;
-      if (this.doorOpen) return;
-      if (!UNLOCKED_STATES.includes(this.nukiState)) return;
-      this.actuate('lock', 'lock after closing').catch((e) => this.log.warn(`Lock after closing failed: ${e.message}`));
+      if (this.doorOpen === true || !UNLOCKED_STATES.includes(this.nukiState)) return;
+      this.actuate('lock', 'auto-lock').catch((e) => this.log.warn(`Auto-lock failed: ${e.message}`));
     }, delay * 1000);
   }
 
@@ -207,11 +219,13 @@ class NukiMqttEvents {
   onNukiState(raw) {
     const s = Number(raw);
     if (!Number.isFinite(s) || s === this.nukiState) return;
+    const wasUnlocked = UNLOCKED_STATES.includes(this.nukiState);
     this.nukiState = s;
     this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
     for (const w of [...this.stateWaiters]) w.check(s);
     this.pushLockState();
     if (s === 1) { clearTimeout(this.relockTimer); this.relockTimer = null; }
+    if (UNLOCKED_STATES.includes(s) && !wasUnlocked) this.armRelock('unlocked');
   }
 
   // ---------- MQTT ----------

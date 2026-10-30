@@ -14,6 +14,19 @@ const DoorState = { Open: 0, Closed: 1 };
  *   log, actuate(action: 'lock'|'unlock', why: string) => Promise<void>, isDoorOpen() => boolean|null
  * @param {object} o options: storagePath, port, passcode, discriminator, name, serial, lockState, doorOpen
  */
+// Matter BatChargeLevel: 0 ok, 1 warning, 2 critical
+function batLevel(b) {
+  if (b.critical) return 2;
+  if (b.percent != null && b.percent <= 20) return 1;
+  return 0;
+}
+// Matter BatChargeState: 0 unknown, 1 charging, 2 full, 3 not charging
+function chargeState(b) {
+  if (b.charging == null) return 0;
+  if (b.charging) return b.percent >= 100 ? 2 : 1;
+  return 3;
+}
+
 async function startMatterLock(p, o) {
   fs.mkdirSync(o.storagePath, { recursive: true });
 
@@ -21,6 +34,7 @@ async function startMatterLock(p, o) {
   const { Environment, ServerNode, VendorId, Logger } = main;
   const { DoorLockDevice } = require('@matter/main/devices/door-lock');
   const { DoorLockServer } = require('@matter/main/behaviors/door-lock');
+  const { PowerSourceServer } = require('@matter/main/behaviors/power-source');
 
   const vars = Environment.default.vars;
   vars.set('path.root', o.storagePath);
@@ -56,7 +70,8 @@ async function startMatterLock(p, o) {
     },
   });
 
-  const endpoint = await node.add(DoorLockDevice.with(NukiDoorLockServer), {
+  const b = o.battery || {};
+  const endpoint = await node.add(DoorLockDevice.with(NukiDoorLockServer, PowerSourceServer.with('Battery', 'Rechargeable')), {
     id: 'lock',
     doorLock: {
       lockState: o.lockState ?? LockState.Locked,
@@ -65,6 +80,18 @@ async function startMatterLock(p, o) {
       operatingMode: 0,
       doorState: o.doorOpen ? DoorState.Open : DoorState.Closed,
       autoRelockTime: 0,
+    },
+    powerSource: {
+      status: 1, // Active
+      order: 0,
+      description: 'Battery',
+      batPercentRemaining: b.percent != null ? Math.round(b.percent * 2) : null,
+      batChargeLevel: batLevel(b),
+      batReplacementNeeded: false,
+      batReplaceability: 1, // NotReplaceable (built-in rechargeable)
+      batChargeState: chargeState(b),
+      batFunctionalWhileCharging: true,
+      endpointList: [],
     },
   });
 
@@ -95,6 +122,11 @@ async function startMatterLock(p, o) {
     },
     async setDoorOpen(open) {
       await endpoint.set({ doorLock: { doorState: open ? DoorState.Open : DoorState.Closed } });
+    },
+    async setBattery(bat) {
+      const ps = { batChargeLevel: batLevel(bat), batChargeState: chargeState(bat) };
+      if (bat.percent != null) ps.batPercentRemaining = Math.round(bat.percent * 2);
+      await endpoint.set({ powerSource: ps });
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

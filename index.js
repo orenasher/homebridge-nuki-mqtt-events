@@ -34,6 +34,7 @@ class NukiMqttEvents {
     this.doorOpen = null;
     this.relockTimer = null;
     this.matter = null;
+    this.battery = { percent: null, charging: null, critical: false };
     api.on('didFinishLaunching', () => {
       this.setup();
       if (this.mode === 'embedded') this.startBroker(); else this.connect();
@@ -177,6 +178,7 @@ class NukiMqttEvents {
         serial: String(this.config.deviceId || 'nuki-lock'),
         lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
         doorOpen: this.doorOpen,
+        battery: this.battery,
         matterLogLevel: c.matterLogLevel,
       });
       if (this.nukiState !== null) this.pushLockState();
@@ -238,6 +240,24 @@ class NukiMqttEvents {
     return `${this.prefix}/${this.config.deviceId || '+'}/state`;
   }
 
+  batteryTopic() {
+    return `${this.prefix}/${this.config.deviceId || '+'}/+`;
+  }
+
+  // Nuki MQTT: batteryChargeState (0-100), batteryCharging (true/false), batteryCritical (true/false)
+  onBattery(field, raw) {
+    const b = this.battery;
+    const v = String(raw).trim().toLowerCase();
+    const before = JSON.stringify(b);
+    if (field === 'batteryChargeState') { const n = Number(v); if (Number.isFinite(n)) b.percent = Math.max(0, Math.min(100, n)); }
+    else if (field === 'batteryCharging') b.charging = v === 'true' || v === '1';
+    else if (field === 'batteryCritical') b.critical = v === 'true' || v === '1';
+    else return;
+    if (JSON.stringify(b) === before) return;
+    this.log.info(`Nuki battery: ${b.percent ?? '?'}%${b.charging ? ', charging' : ''}${b.critical ? ', CRITICAL' : ''}`);
+    if (this.matter) this.matter.setBattery(b).catch((e) => this.log.warn(`Matter lock: could not update battery: ${e.message}`));
+  }
+
   learnId(topic) {
     if (this.nukiId) return;
     const parts = topic.split('/');
@@ -254,6 +274,8 @@ class NukiMqttEvents {
     } else if (topicMatches(this.stateTopic(), topic)) {
       this.learnId(topic);
       this.onNukiState(payload);
+    } else if (this.lockCfg && topicMatches(this.batteryTopic(), topic)) {
+      this.onBattery(topic.split('/').pop(), payload);
     }
   }
 
@@ -276,6 +298,7 @@ class NukiMqttEvents {
     // Last known lock state from before the restart
     for (const [t, b] of this.broker.retained) {
       if (topicMatches(this.stateTopic(), t)) { this.learnId(t); this.onNukiState(b.toString().trim()); }
+      else if (this.lockCfg && topicMatches(this.batteryTopic(), t)) this.onBattery(t.split('/').pop(), b.toString());
     }
     let saveTimer = null;
     this.broker.on('retainChanged', () => {
@@ -306,7 +329,7 @@ class NukiMqttEvents {
     const c = this.config;
     const url = `mqtt://${c.host || '127.0.0.1'}:${c.port || 1883}`;
     const topics = [this.eventTopic()];
-    if (this.lockCfg) topics.push(this.stateTopic());
+    if (this.lockCfg) topics.push(this.stateTopic(), this.batteryTopic());
     this.client = mqtt.connect(url, {
       username: c.username || undefined,
       password: c.password || undefined,

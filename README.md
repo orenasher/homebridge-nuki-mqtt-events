@@ -37,6 +37,7 @@ iOS 27.2 adds **Lock After Closing** and **Door Left Open** for Matter locks tha
 
 - Lock / unlock from Home is sent to the Nuki over MQTT (`nuki/<id>/lockAction`) and confirmed by `nuki/<id>/state`. Enable lock actions in the Nuki app's MQTT settings.
 - The door position comes from a HomeKit switch the plugin adds (**Door Open**). Feed it from any door sensor (e.g. Aqara) with two Home automations: sensor opens → turn the switch on; sensor closes → turn it off.
+- Battery level and charging state from the Nuki (MQTT `batteryChargeState`, `batteryCharging`, `batteryCritical`) are shown on the lock in Home.
 - Auto-lock uses the time set in Home (Automatic Lock), or `lockAfterCloseSeconds` if Home has none. The timer starts on any unlock (app, keypad, fingerprint, Home) and restarts when the door closes. It never locks while the door is open.
 
 Enable it under **Matter door lock** in the plugin settings, restart, and pair it in Home with the code printed in the log (Add Accessory → More options). The plugin logs what Home writes to the lock (e.g. `autoRelockTime`).

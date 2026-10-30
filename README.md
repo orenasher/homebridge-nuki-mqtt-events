@@ -44,6 +44,10 @@ Enable it under **Matter door lock** in the plugin settings, restart, and pair i
 
 Note: Apple may show Lock After Closing only for certain locks; this is experimental. The lock appears in Home next to the Nuki's own Matter lock.
 
+## Keypad accessory (v1.3)
+
+Optional (**Keypad accessory** in the settings): the keypad as its own accessory — a button that fires a single press for a fingerprint and a double press for a code, plus a battery. The Nuki only reports whether the keypad battery is low (`keypadBatteryCritical`), not a percentage, so Home shows 100% or 10% and a low-battery warning you can automate on.
+
 ## Event format (Nuki MQTT API v1.6)
 `LockAction,Trigger,AuthID,CodeID,KeypadSource` — keypad source `1` = code, `2` = fingerprint.
 

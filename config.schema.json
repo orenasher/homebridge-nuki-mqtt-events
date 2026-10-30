@@ -143,6 +143,23 @@
           }
         }
       },
+      "keypad": {
+        "title": "Keypad accessory",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "title": "Show the keypad as its own accessory",
+            "type": "boolean",
+            "default": false,
+            "description": "A button with a battery: single press = fingerprint, double press = code. The Nuki only reports whether the keypad battery is low (no percentage), so Home shows 100% or 10% and a low-battery warning."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "default": "Nuki Keypad"
+          }
+        }
+      },
       "doorLock": {
         "title": "Matter door lock with door position (for iOS 27.2 \"Lock After Closing\")",
         "type": "object",

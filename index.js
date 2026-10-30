@@ -31,6 +31,8 @@ class NukiMqttEvents {
     this.nukiState = null;
     this.stateWaiters = new Set();
     this.lockCfg = this.config.doorLock && this.config.doorLock.enabled ? this.config.doorLock : null;
+    this.keypadCfg = this.config.keypad && this.config.keypad.enabled ? this.config.keypad : null;
+    this.keypadLow = false;
     this.doorOpen = null;
     this.relockTimer = null;
     this.matter = null;
@@ -86,9 +88,58 @@ class NukiMqttEvents {
     }
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
+    if (this.keypadCfg) keep.add(this.setupKeypad());
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
+  }
+
+  // ---------- Keypad accessory: a button (fingerprint = single press, code = double press) + battery ----------
+  // The Nuki only reports keypadBatteryCritical (true/false) — no percentage — so the level shows 100% or 10%.
+
+  setupKeypad() {
+    const { Service, Characteristic, uuid } = this.api.hap;
+    const name = this.keypadCfg.name || 'Nuki Keypad';
+    const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:keypad`);
+    let acc = this.cached.get(id);
+    if (!acc) {
+      acc = new this.api.platformAccessory(name, id);
+      this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
+    }
+    acc.getService(Service.AccessoryInformation)
+      .setCharacteristic(Characteristic.Manufacturer, 'Nuki')
+      .setCharacteristic(Characteristic.Model, 'Keypad')
+      .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-keypad`);
+    const btn = acc.getService(Service.StatelessProgrammableSwitch) || acc.addService(Service.StatelessProgrammableSwitch, name);
+    btn.getCharacteristic(Characteristic.ProgrammableSwitchEvent).setProps({ validValues: [0, 1] });
+    const bat = acc.getService(Service.Battery) || acc.addService(Service.Battery, `${name} Battery`);
+    this.keypadLow = acc.context.low === true;
+    bat.getCharacteristic(Characteristic.BatteryLevel).onGet(() => (this.keypadLow ? 10 : 100));
+    bat.getCharacteristic(Characteristic.StatusLowBattery).onGet(() => (this.keypadLow ? 1 : 0));
+    bat.getCharacteristic(Characteristic.ChargingState).onGet(() => 2); // not chargeable
+    this.keypadAcc = acc;
+    this.keypadBtn = btn;
+    this.keypadBat = bat;
+    return id;
+  }
+
+  onKeypadBattery(raw) {
+    const low = ['true', '1'].includes(String(raw).trim().toLowerCase());
+    if (low === this.keypadLow && this.keypadAcc && this.keypadAcc.context.low !== undefined) return;
+    this.keypadLow = low;
+    if (!this.keypadAcc) return;
+    this.keypadAcc.context.low = low;
+    const C = this.api.hap.Characteristic;
+    this.keypadBat.updateCharacteristic(C.StatusLowBattery, low ? 1 : 0);
+    this.keypadBat.updateCharacteristic(C.BatteryLevel, low ? 10 : 100);
+    this.log.info(`Keypad battery: ${low ? 'LOW — replace the batteries' : 'OK'}`);
+  }
+
+  keypadPress(source) {
+    if (!this.keypadBtn) return;
+    const ev = source === SOURCES.fingerprint ? 0 : source === SOURCES.code ? 1 : null;
+    if (ev === null) return;
+    this.keypadBtn.updateCharacteristic(this.api.hap.Characteristic.ProgrammableSwitchEvent, ev);
   }
 
   // ---------- Door state input (fed by a Home automation from any door sensor, e.g. Aqara) ----------
@@ -268,7 +319,9 @@ class NukiMqttEvents {
   }
 
   onMqtt(topic, payload, retained) {
-    if (topicMatches(this.eventTopic(), topic)) {
+    if (topic.endsWith('/keypadBatteryCritical') && topicMatches(this.batteryTopic(), topic)) {
+      this.onKeypadBattery(payload);
+    } else if (topicMatches(this.eventTopic(), topic)) {
       this.learnId(topic);
       if (!retained) this.handle(payload);
     } else if (topicMatches(this.stateTopic(), topic)) {
@@ -297,7 +350,8 @@ class NukiMqttEvents {
     } catch (e) { /* first run */ }
     // Last known lock state from before the restart
     for (const [t, b] of this.broker.retained) {
-      if (topicMatches(this.stateTopic(), t)) { this.learnId(t); this.onNukiState(b.toString().trim()); }
+      if (t.endsWith('/keypadBatteryCritical') && topicMatches(this.batteryTopic(), t)) this.onKeypadBattery(b.toString());
+      else if (topicMatches(this.stateTopic(), t)) { this.learnId(t); this.onNukiState(b.toString().trim()); }
       else if (this.lockCfg && topicMatches(this.batteryTopic(), t)) this.onBattery(t.split('/').pop(), b.toString());
     }
     let saveTimer = null;
@@ -330,6 +384,7 @@ class NukiMqttEvents {
     const url = `mqtt://${c.host || '127.0.0.1'}:${c.port || 1883}`;
     const topics = [this.eventTopic()];
     if (this.lockCfg) topics.push(this.stateTopic(), this.batteryTopic());
+    else if (this.keypadCfg) topics.push(`${this.prefix}/${this.config.deviceId || '+'}/keypadBatteryCritical`);
     this.client = mqtt.connect(url, {
       username: c.username || undefined,
       password: c.password || undefined,
@@ -355,6 +410,7 @@ class NukiMqttEvents {
     // Keypad actions (code / fingerprint) carry a non-zero code ID
     const fromKeypad = codeId > 0;
     if (!fromKeypad) return;
+    this.keypadPress(extra);
     for (const sw of this.switches) {
       if (!sw.actions.includes(action)) continue;
       if (!sw.sources.includes(extra)) continue;

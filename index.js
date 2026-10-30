@@ -241,6 +241,10 @@ class NukiMqttEvents {
   pushLockState() {
     const s = NUKI_TO_MATTER[this.nukiState];
     if (s === undefined || !this.matter) return;
+    if (this.nukiState === 254) {
+      this.matter.reportJam().catch((e) => this.log.warn(`Matter lock: could not report jam: ${e.message}`));
+      return;
+    }
     this.matter.setLockState(s).catch((e) => this.log.warn(`Matter lock: could not update lock state: ${e.message}`));
   }
 
@@ -274,7 +278,8 @@ class NukiMqttEvents {
     if (!Number.isFinite(s) || s === this.nukiState) return;
     const wasUnlocked = UNLOCKED_STATES.includes(this.nukiState);
     this.nukiState = s;
-    this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
+    if (s === 254) this.log.warn('Nuki state: MOTOR BLOCKED — the lock is jammed');
+    else this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
     for (const w of [...this.stateWaiters]) w.check(s);
     this.pushLockState();
     if (s === 1) { clearTimeout(this.relockTimer); this.relockTimer = null; }

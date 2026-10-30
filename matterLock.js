@@ -123,6 +123,14 @@ async function startMatterLock(p, o) {
     async setDoorOpen(open) {
       await endpoint.set({ doorLock: { doorState: open ? DoorState.Open : DoorState.Closed } });
     },
+    // Motor blocked: lockState NotFullyLocked (Home shows "Jammed") + DoorLockAlarm LockJammed event
+    async reportJam() {
+      await endpoint.set({ doorLock: { lockState: LockState.NotFullyLocked } });
+      await endpoint.act((agent) => {
+        const dl = agent.get(NukiDoorLockServer);
+        dl.events.doorLockAlarm.emit({ alarmCode: 0 }, agent.context);
+      });
+    },
     async setBattery(bat) {
       const ps = { batChargeLevel: batLevel(bat), batChargeState: chargeState(bat) };
       if (bat.percent != null) ps.batPercentRemaining = Math.round(bat.percent * 2);

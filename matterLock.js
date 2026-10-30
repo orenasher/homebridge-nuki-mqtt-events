@@ -131,6 +131,20 @@ async function startMatterLock(p, o) {
         dl.events.doorLockAlarm.emit({ alarmCode: 0 }, agent.context);
       });
     },
+    // LockOperation event for a lock/unlock done outside Matter (source: 1 manual, 2 Nuki app, 3 keypad, 4 auto, 5 button)
+    async reportOperation(action, source) {
+      await endpoint.act((agent) => {
+        const dl = agent.get(NukiDoorLockServer);
+        dl.events.lockOperation.emit({
+          lockOperationType: action === 'lock' ? 0 : 1,
+          operationSource: source,
+          userIndex: null,
+          fabricIndex: null,
+          sourceNode: null,
+          credentials: null,
+        }, agent.context);
+      });
+    },
     async setBattery(bat) {
       const ps = { batChargeLevel: batLevel(bat), batChargeState: chargeState(bat) };
       if (bat.percent != null) ps.batPercentRemaining = Math.round(bat.percent * 2);

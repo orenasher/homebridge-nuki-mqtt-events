@@ -256,6 +256,8 @@ class NukiMqttEvents {
     const code = action === 'lock' ? ACTIONS.lock : ACTIONS.unlock;
     const topic = `${this.prefix}/${this.nukiId}/lockAction`;
     this.log.info(`${action === 'lock' ? 'Locking' : 'Unlocking'} Nuki (${why}) → ${topic} = ${code}`);
+    const op = { action, at: Date.now() };
+    if (why === 'Home (Matter)' || why === 'Matter auto-relock') this.matterOp = op; else this.pluginOp = op;
     this.publish(topic, String(code));
     const timeoutMs = (Number(this.lockCfg && this.lockCfg.actionTimeout) || 30) * 1000;
     return new Promise((resolve, reject) => {
@@ -282,8 +284,33 @@ class NukiMqttEvents {
     else this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
     for (const w of [...this.stateWaiters]) w.check(s);
     this.pushLockState();
+    const nowLocked = s === 1, nowUnlocked = UNLOCKED_STATES.includes(s);
+    if ((nowLocked && this.prevSettled === 3) || (nowUnlocked && this.prevSettled === 1)) this.reportOperation(nowLocked ? 'lock' : 'unlock');
+    if (nowLocked || nowUnlocked) this.prevSettled = s === 1 ? 1 : 3;
     if (s === 1) { clearTimeout(this.relockTimer); this.relockTimer = null; }
     if (UNLOCKED_STATES.includes(s) && !wasUnlocked) this.armRelock('unlocked');
+  }
+
+  // Lock/unlock that did not come through Matter (Nuki app, keypad, fingerprint, button, plugin auto-lock):
+  // send a Matter LockOperation event so Home shows "locked/unlocked" notifications, like a native lock.
+  reportOperation(action) {
+    if (!this.matter) return;
+    const fresh = (op) => op && op.action === action && Date.now() - op.at < 60000;
+    if (fresh(this.matterOp)) { this.matterOp = null; return; } // Home command — matter.js already reported it
+    const byPlugin = fresh(this.pluginOp);
+    this.pluginOp = null;
+    clearTimeout(this.opTimer);
+    this.opTimer = setTimeout(() => {
+      const ev = this.lastEvent && Date.now() - this.lastEvent.at < 15000 ? this.lastEvent : null;
+      let source = 1; // Manual
+      if (byPlugin) source = 4; // Auto (plugin auto-lock)
+      else if (ev && ev.codeId > 0) source = 3; // Keypad (code / fingerprint)
+      else if (ev && ev.trigger === 2) source = 5; // Button on the lock
+      else if (ev && (ev.trigger === 3 || ev.trigger === 6)) source = 4; // Auto (Nuki timer / auto lock)
+      else if (ev && ev.trigger === 0) source = 2; // Nuki app (Bluetooth)
+      this.lastEvent = null;
+      this.matter.reportOperation(action, source).catch((e) => this.log.warn(`Matter lock: could not report ${action}: ${e.message}`));
+    }, 1500);
   }
 
   // ---------- MQTT ----------
@@ -409,6 +436,7 @@ class NukiMqttEvents {
   handle(payload) {
     const p = payload.split(',').map((x) => Number(x));
     const [action, trigger, authId, codeId, extra] = p;
+    this.lastEvent = { action, trigger, codeId, at: Date.now() };
     if (this.config.logEvents !== false) {
       this.log.info(`Event "${payload}" → action=${action} trigger=${trigger} authId=${authId} codeId=${codeId} extra=${extra}`);
     }

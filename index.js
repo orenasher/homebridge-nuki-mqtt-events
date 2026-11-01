@@ -93,7 +93,7 @@ class NukiMqttEvents {
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
-    if (this.childCfg) keep.add(this.setupChildLock());
+    if (this.childCfg && this.childCfg.style !== 'matter') keep.add(this.setupChildLock());
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
@@ -247,6 +247,7 @@ class NukiMqttEvents {
     if (this.childAcc) this.childAcc.context.childOn = on;
     if (this.childSvc) this.childSvc.updateCharacteristic(this.api.hap.Characteristic.On, on);
     if (this.hapLock) this.hapLock.updateCharacteristic(this.api.hap.Characteristic.LockPhysicalControls, on ? 1 : 0);
+    if (this.matter && this.matter.setChildLock) this.matter.setChildLock(on).catch(() => {});
   }
 
   startChildLock() {
@@ -347,6 +348,7 @@ class NukiMqttEvents {
         log: this.log,
         actuate: (a, why) => this.actuate(a, why),
         isDoorOpen: () => this.doorOpen,
+        onChildLock: (on) => this.applyChild(on).catch((e) => { this.matter && this.matter.setChildLock(this.childOn); throw e; }),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,
@@ -357,6 +359,8 @@ class NukiMqttEvents {
         lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
         doorOpen: this.doorOpen,
         battery: this.battery,
+        childLock: !!(this.childCfg && this.childCfg.style === 'matter'),
+        childOn: this.childOn,
         matterLogLevel: c.matterLogLevel,
       });
       if (this.nukiState !== null) this.pushLockState();

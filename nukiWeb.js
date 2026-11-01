@@ -61,6 +61,34 @@ class NukiWeb {
     const cfg = { ...lock.config, buttonEnabled: enabled };
     await request(this.token, 'POST', `/smartlock/${this.id}/config`, cfg);
   }
+
+  // Keypad codes (authorization type 13). Needs the token scope "View and manage authorizations".
+  async listAuths() {
+    const id = await this.findId();
+    const list = await request(this.token, 'GET', `/smartlock/${id}/auth`);
+    return Array.isArray(list) ? list : [];
+  }
+
+  async addKeypadCode(name, code) {
+    const id = await this.findId();
+    await request(this.token, 'PUT', `/smartlock/${id}/auth`, { name: name.slice(0, 20), type: 13, code: Number(code) });
+    // the create call returns no body: find the new entry by its code
+    const auth = (await this.listAuths()).find((a) => a.type === 13 && String(a.code) === String(code));
+    return auth ? auth.id : null;
+  }
+
+  async updateKeypadCode(authId, fields) {
+    const id = await this.findId();
+    const body = { ...fields };
+    if (body.name) body.name = body.name.slice(0, 20);
+    if (body.code != null) body.code = Number(body.code);
+    await request(this.token, 'POST', `/smartlock/${id}/auth/${authId}`, body);
+  }
+
+  async removeKeypadCode(authId) {
+    const id = await this.findId();
+    await request(this.token, 'DELETE', `/smartlock/${id}/auth/${authId}`);
+  }
 }
 
 module.exports = { NukiWeb };

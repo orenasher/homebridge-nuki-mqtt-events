@@ -44,10 +44,12 @@ class NukiMqttEvents {
       if (this.mode === 'embedded') this.startBroker(); else this.connect();
       if (this.lockCfg) this.startLock();
       if (this.childCfg) this.startChildLock();
+      if (this.lockCfg && this.lockCfg.accessCodes !== false) this.loadCodes();
     });
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -309,9 +311,110 @@ class NukiMqttEvents {
     if (this.matter && this.matter.setChildLock) this.matter.setChildLock(on).catch(() => {});
   }
 
-  startChildLock() {
+  web() {
+    if (this.nukiWeb) return this.nukiWeb;
+    const token = this.childCfg ? this.childCfg.token : this.config.childLock && this.config.childLock.token;
+    if (!token) return null;
     const { NukiWeb } = require('./nukiWeb');
-    this.nukiWeb = new NukiWeb(this.childCfg.token, this.config.deviceId || this.nukiId, this.childCfg.smartlockId);
+    const smartlockId = this.config.childLock && this.config.childLock.smartlockId;
+    this.nukiWeb = new NukiWeb(token, this.config.deviceId || this.nukiId, smartlockId);
+    return this.nukiWeb;
+  }
+
+  // ---------- Access codes (Home "Manage Access" → Nuki Keypad) ----------
+
+  codesFile() { return require('path').join(this.api.user.storagePath(), 'nuki-matter-lock', 'keypad-codes.json'); }
+
+  loadCodes() {
+    try { this.codeMap = JSON.parse(require('fs').readFileSync(this.codesFile(), 'utf8')); } catch (e) { this.codeMap = {}; }
+  }
+
+  saveCodes() {
+    const fs = require('fs');
+    try {
+      fs.mkdirSync(require('path').dirname(this.codesFile()), { recursive: true });
+      fs.writeFileSync(this.codesFile(), JSON.stringify(this.codeMap, null, 2), { mode: 0o600 });
+    } catch (e) { this.log.warn(`Access codes: could not save: ${e.message}`); }
+  }
+
+  // Nuki Keypad codes: 6 digits 1-9 (the keypad has no 0) and not starting with 12
+  checkCode(code) {
+    if (!/^[1-9]{6}$/.test(code)) return 'the Nuki Keypad needs exactly 6 digits from 1 to 9 (no 0)';
+    if (code.startsWith('12')) return 'Nuki Keypad codes cannot start with 12';
+    return null;
+  }
+
+  // Called by the Matter lock after Home changed users/codes: list = current PIN codes, fresh = {index: code}
+  onCodes(list, fresh) {
+    if (!this.codeMap) this.loadCodes();
+    for (const [i, code] of Object.entries(fresh)) {
+      const cur = this.codeMap[i] || {};
+      this.codeMap[i] = { ...cur, code, synced: cur.code === code ? cur.synced : false };
+    }
+    const present = new Set(list.map((c) => String(c.index)));
+    for (const c of list) {
+      const e = this.codeMap[c.index];
+      if (!e) continue;
+      e.userIndex = c.userIndex;
+      const name = c.name || `Home ${c.index}`;
+      if (e.name !== name) { e.name = name; e.synced = false; }
+    }
+    for (const i of Object.keys(this.codeMap)) if (!present.has(i)) this.codeMap[i].removed = true;
+    this.saveCodes();
+    this.syncCodesSoon();
+  }
+
+  syncCodesSoon() {
+    clearTimeout(this.codeTimer);
+    this.codeTimer = setTimeout(() => {
+      if (this.codeSyncing) return this.syncCodesSoon();
+      this.codeSyncing = true;
+      this.syncCodes().catch((e) => this.log.warn(`Access codes: ${e.message}`)).finally(() => { this.codeSyncing = false; });
+    }, this.codeDelayMs ?? 3000); // Home sends the code and then the name — wait for both
+  }
+
+  async syncCodes() {
+    const web = this.web();
+    if (!web) { this.log.warn('Access codes: add the Nuki Web token (Child lock section) to send the codes to the Nuki Keypad'); return; }
+    let retry = false;
+    for (const [i, e] of Object.entries(this.codeMap)) {
+      try {
+        if (e.removed) {
+          if (e.id) { await web.removeKeypadCode(e.id); this.log.info(`Access codes: removed "${e.name}" from the Nuki Keypad`); }
+          delete this.codeMap[i];
+        } else if (!e.synced) {
+          const name = e.name || `Home ${i}`;
+          if (e.id) {
+            await web.updateKeypadCode(e.id, { name, code: e.code });
+            this.log.info(`Access codes: updated "${name}" on the Nuki Keypad`);
+          } else {
+            e.id = await web.addKeypadCode(name, e.code);
+            const auth = e.id && (await web.listAuths()).find((a) => a.id === e.id);
+            if (auth) e.authId = auth.authId;
+            this.log.info(`Access codes: added "${name}" to the Nuki Keypad`);
+          }
+          e.synced = true;
+        }
+      } catch (err) {
+        retry = true;
+        this.log.warn(`Access codes: "${e.name || i}": ${err.message}${/ 401| 403/.test(err.message) ? ' — the Nuki Web token needs the scope "View and manage authorizations"' : ''}`);
+      }
+      this.saveCodes();
+    }
+    if (retry) { clearTimeout(this.codeRetry); this.codeRetry = setTimeout(() => this.syncCodesSoon(), this.codeRetryMs ?? 120000); }
+  }
+
+  // Home user (and code) behind a keypad unlock, for "unlocked by <name>" in Home
+  codeUser(ev) {
+    if (!ev || !this.codeMap) return null;
+    for (const [i, e] of Object.entries(this.codeMap)) {
+      if (e.authId != null && e.userIndex && (e.authId === ev.authId || e.authId === ev.codeId)) return { userIndex: e.userIndex, credIndex: Number(i) };
+    }
+    return null;
+  }
+
+  startChildLock() {
+    this.web();
     // Nuki Web keeps the setting it was given; read it back so changes made in the Nuki app show up too.
     const poll = async () => {
       try {
@@ -407,9 +510,9 @@ class NukiMqttEvents {
       if (this.nukiState !== null) this.pushLockState();
     } catch (e) {
       this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
-      if (opts.childLock) {
-        this.log.warn('Matter lock: starting again without the child-lock profile');
-        try { this.matter = await this.openMatterLock({ childLock: false }); if (this.nukiState !== null) this.pushLockState(); } catch (e2) { this.log.error(`Matter lock could not start: ${e2.message}`); }
+      if (opts.childLock || this.lockCfg.accessCodes !== false) {
+        this.log.warn('Matter lock: starting again without the child-lock and access-code profile');
+        try { this.matter = await this.openMatterLock({ childLock: false, accessCodes: false }); if (this.nukiState !== null) this.pushLockState(); } catch (e2) { this.log.error(`Matter lock could not start: ${e2.message}`); }
       }
     }
   }
@@ -424,6 +527,8 @@ class NukiMqttEvents {
         actuate: (a, why) => this.actuate(a, why),
         isDoorOpen: () => this.doorOpen,
         onChildLock: (on) => this.applyChild(on),
+        onCodes: (list, fresh) => this.onCodes(list, fresh),
+        checkCode: (code) => this.checkCode(code),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,
@@ -435,6 +540,7 @@ class NukiMqttEvents {
         doorOpen: this.doorOpen,
         battery: this.battery,
         childLock: opts.childLock,
+        accessCodes: opts.accessCodes !== false && c.accessCodes !== false,
         childLockName: this.childCfg && this.childCfg.name,
         childOn: this.childOn,
         matterLogLevel: c.matterLogLevel,
@@ -513,8 +619,9 @@ class NukiMqttEvents {
       else if (ev && ev.trigger === 2) source = 5; // Button on the lock
       else if (ev && (ev.trigger === 3 || ev.trigger === 6)) source = 4; // Auto (Nuki timer / auto lock)
       else if (ev && ev.trigger === 0) source = 2; // Nuki app (Bluetooth)
+      const who = source === 3 ? this.codeUser(ev) : null;
       this.lastEvent = null;
-      this.matter.reportOperation(action, source).catch((e) => this.log.warn(`Matter lock: could not report ${action}: ${e.message}`));
+      this.matter.reportOperation(action, source, who ? who.userIndex : null, who ? who.credIndex : null).catch((e) => this.log.warn(`Matter lock: could not report ${action}: ${e.message}`));
     }, 1500);
   }
 
@@ -642,7 +749,7 @@ class NukiMqttEvents {
   handle(payload) {
     const p = payload.split(',').map((x) => Number(x));
     const [action, trigger, authId, codeId, extra] = p;
-    this.lastEvent = { action, trigger, codeId, at: Date.now() };
+    this.lastEvent = { action, trigger, authId, codeId, at: Date.now() };
     if (this.config.logEvents !== false) {
       this.log.info(`Event "${payload}" → action=${action} trigger=${trigger} authId=${authId} codeId=${codeId} extra=${extra}`);
     }

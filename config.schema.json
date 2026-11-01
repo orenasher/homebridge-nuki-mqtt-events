@@ -293,6 +293,12 @@
               "info",
               "debug"
             ]
+          },
+          "accessCodes": {
+            "title": "Access codes (Home \"Manage Access\" → Nuki Keypad)",
+            "type": "boolean",
+            "default": true,
+            "description": "People and codes added in Home are created on the Nuki Keypad too (6 digits 1-9, not starting with 12). Needs the Nuki Web token from the Child lock section with the scope \"View and manage authorizations\". Changing this needs a re-pair in Home."
           }
         }
       }

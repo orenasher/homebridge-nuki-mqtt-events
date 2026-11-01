@@ -60,6 +60,18 @@ The change reaches the lock on its next sync with Nuki (usually within a minute)
 
 **Show as:** *inside the Matter lock* — a second lock on the Front Door accessory named after the child lock (Locked = button disabled), a separate switch, or *inside a HomeKit lock* — an extra HomeKit lock for the same door with a Lock Management service (HomeKit lock profile) carrying the child lock (`LockPhysicalControls`) and the auto-lock time (`AutoSecurityTimeout`), plus the battery and the jammed state. Experimental: whether Home shows these rows is not documented. Matter locks have no child-lock setting, so it cannot be added to the Matter lock itself.
 
+## Access codes → Nuki Keypad (v1.13)
+
+The Matter lock carries Home's **Manage Access** section (people + PIN codes, like a native Matter lock).
+Every code added in Home is created on the Nuki Keypad through Nuki Web (with the person's name), renamed
+or changed with it, and removed when it is removed in Home. A keypad unlock with such a code shows up in
+Home as that person.
+
+- Codes must be **6 digits from 1 to 9** (the keypad has no 0) and must not start with **12** — Home shows
+  an error for any other code.
+- Uses the Nuki Web token of the Child lock section; the token needs the scope **View and manage authorizations**.
+- `doorLock.accessCodes: false` turns it off (re-pair the lock in Home after changing it).
+
 ## Event format (Nuki MQTT API v1.6)
 `LockAction,Trigger,AuthID,CodeID,KeypadSource` — keypad source `1` = code, `2` = fingerprint.
 

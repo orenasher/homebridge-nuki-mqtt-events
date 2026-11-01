@@ -41,9 +41,23 @@ async function startMatterLock(p, o) {
   vars.set('storage.path', o.storagePath);
   try { Logger.level = o.matterLogLevel || 'warn'; } catch (e) { /* older matter.js */ }
 
-  // With the child lock on, the lock uses the same Matter profile as the Aqara U200 (users, PIN, remote
-  // credentials + one-touch locking, wrong-code limit...), whose Home page shows a Child Lock control.
-  const features = ['DoorPositionSensor'];
+  // Access codes: Home's "Manage Access" (people and their PIN codes). Each code Home adds is also created
+  // on the Nuki Keypad through Nuki Web, and removed from it when it is removed in Home.
+  const features = ['DoorPositionSensor', ...(o.accessCodes ? ['User', 'PinCredential', 'CredentialOverTheAirAccess'] : [])];
+  const PIN = 1; // CredentialType.Pin
+  const snapshot = (st) => {
+    const names = new Map((st.users || []).map((u) => [u.userIndex, u.userName || '']));
+    const owner = new Map();
+    for (const u of st.users || []) for (const c of u.credentials || []) if (c.credentialType === PIN) owner.set(c.credentialIndex, u.userIndex);
+    return (st.credentials || []).filter((c) => c.credentialType === PIN).map((c) => {
+      const userIndex = owner.get(c.credentialIndex) ?? null;
+      return { index: c.credentialIndex, userIndex, name: names.get(userIndex) || '' };
+    });
+  };
+  const changed = (self, codes) => {
+    if (!o.accessCodes || !p.onCodes) return;
+    try { p.onCodes(snapshot(self.state), codes || {}); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
+  };
   class NukiDoorLockServer extends DoorLockServer.with(...features) {
     // Called by matter.js for Home commands (source Remote) and for its own auto-relock (source Auto).
     async handleLockOperation(op) {
@@ -53,6 +67,33 @@ async function startMatterLock(p, o) {
         throw new Error('Door is open');
       }
       await p.actuate(op.actuation === 'lock' ? 'lock' : 'unlock', auto ? 'Matter auto-relock' : 'Home (Matter)');
+    }
+
+    setCredential(request) {
+      const isPin = request.credential && request.credential.credentialType === PIN && request.credentialData;
+      const code = isPin ? Buffer.from(request.credentialData).toString('utf8') : null;
+      if (isPin && p.checkCode) {
+        const why = p.checkCode(code);
+        if (why) {
+          p.log.warn(`Matter lock: Home access code refused — ${why}`);
+          return { status: 0x85, userIndex: null, nextCredentialIndex: null }; // InvalidCommand
+        }
+      }
+      const res = super.setCredential(request);
+      if (isPin && res && res.status === 0) changed(this, { [request.credential.credentialIndex]: code });
+      return res;
+    }
+
+    setUser(request) {
+      return Promise.resolve(super.setUser(request)).then((r) => { changed(this); return r; });
+    }
+
+    clearUser(request) {
+      return Promise.resolve(super.clearUser(request)).then((r) => { changed(this); return r; });
+    }
+
+    clearCredential(request) {
+      return Promise.resolve(super.clearCredential(request)).then((r) => { changed(this); return r; });
     }
   }
 
@@ -93,6 +134,16 @@ async function startMatterLock(p, o) {
       operatingMode: 0,
       doorState: o.doorOpen ? DoorState.Open : DoorState.Closed,
       autoRelockTime: 0,
+      ...(o.accessCodes ? {
+        numberOfTotalUsersSupported: 20,
+        numberOfPinUsersSupported: 20,
+        numberOfCredentialsSupportedPerUser: 5,
+        minPinCodeLength: 6, // Nuki Keypad codes: exactly 6 digits
+        maxPinCodeLength: 6,
+        wrongCodeEntryLimit: 5,
+        userCodeTemporaryDisableTime: 60,
+        requirePinForRemoteOperation: false,
+      } : {}),
     },
     powerSource: {
       status: 1, // Active
@@ -202,16 +253,16 @@ async function startMatterLock(p, o) {
       });
     },
     // LockOperation event for a lock/unlock done outside Matter (source: 1 manual, 2 Nuki app, 3 keypad, 4 auto, 5 button)
-    async reportOperation(action, source) {
+    async reportOperation(action, source, userIndex = null, credIndex = null) {
       await endpoint.act((agent) => {
         const dl = agent.get(NukiDoorLockServer);
         dl.events.lockOperation.emit({
           lockOperationType: action === 'lock' ? 0 : 1,
           operationSource: source,
-          userIndex: null,
+          userIndex,
           fabricIndex: null,
           sourceNode: null,
-          credentials: null,
+          credentials: userIndex ? [{ credentialType: PIN, credentialIndex: credIndex }] : null,
         }, agent.context);
       });
     },
@@ -227,6 +278,7 @@ async function startMatterLock(p, o) {
         try { await node.set({ basicInformation: { localConfigDisabled: !!on } }); } finally { node.__fromPlugin = false; }
       }
     },
+    codes() { return o.accessCodes ? snapshot(endpoint.state.doorLock) : []; },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },
     async close() { await node.close(); },

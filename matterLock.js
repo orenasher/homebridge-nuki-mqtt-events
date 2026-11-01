@@ -43,7 +43,7 @@ async function startMatterLock(p, o) {
 
   // With the child lock on, the lock uses the same Matter profile as the Aqara U200 (users, PIN, remote
   // credentials + one-touch locking, wrong-code limit...), whose Home page shows a Child Lock control.
-  const features = o.childLock ? ['DoorPositionSensor', 'User', 'PinCredential', 'CredentialOverTheAirAccess'] : ['DoorPositionSensor'];
+  const features = ['DoorPositionSensor'];
   class NukiDoorLockServer extends DoorLockServer.with(...features) {
     // Called by matter.js for Home commands (source Remote) and for its own auto-relock (source Auto).
     async handleLockOperation(op) {
@@ -72,6 +72,8 @@ async function startMatterLock(p, o) {
       productId: 0x8001,
       serialNumber: o.serial,
       uniqueId: `nuki-${o.serial}`,
+      // Home shows "Child Lock" for an accessory that has this attribute (disable local configuration).
+      ...(o.childLock ? { localConfigDisabled: !!o.childOn } : {}),
     },
   });
 
@@ -91,18 +93,6 @@ async function startMatterLock(p, o) {
       operatingMode: 0,
       doorState: o.doorOpen ? DoorState.Open : DoorState.Closed,
       autoRelockTime: 0,
-      ...(o.childLock ? {
-        numberOfTotalUsersSupported: 10,
-        numberOfPinUsersSupported: 10,
-        numberOfCredentialsSupportedPerUser: 5,
-        minPinCodeLength: 4,
-        maxPinCodeLength: 8,
-        wrongCodeEntryLimit: 5,
-        userCodeTemporaryDisableTime: 60,
-        requirePinForRemoteOperation: false,
-        enableOneTouchLocking: !!o.childOn,
-        supportedOperatingModes: { normal: false, vacation: false, privacy: false, noRemoteLockUnlock: false, passage: false, alwaysSet: 2047 },
-      } : {}),
     },
     powerSource: {
       status: 1, // Active
@@ -176,6 +166,14 @@ async function startMatterLock(p, o) {
     child = await endpoint.add(new (main.Endpoint)(ChildDevice, childInit)); // a part of the bridged lock
   }
 
+  if (o.childLock) {
+    node.events.basicInformation.localConfigDisabled$Changed.on((v) => {
+      if (node.__fromPlugin) return;
+      p.log.info(`Matter lock: Home set child lock ${v ? 'ON' : 'OFF'}`);
+      Promise.resolve(p.onChildLock && p.onChildLock(!!v)).catch((e) => p.log.warn(`Matter lock: child lock: ${e.message}`));
+    });
+  }
+
   await node.start();
 
   const codes = node.state.commissioning.pairingCodes;
@@ -224,6 +222,10 @@ async function startMatterLock(p, o) {
     },
     async setChildLock(on) {
       if (child) await child.set({ doorLock: { lockState: on ? LockState.Locked : LockState.Unlocked } });
+      else if (o.childLock) {
+        node.__fromPlugin = true;
+        try { await node.set({ basicInformation: { localConfigDisabled: !!on } }); } finally { node.__fromPlugin = false; }
+      }
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

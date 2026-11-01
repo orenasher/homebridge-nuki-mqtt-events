@@ -357,8 +357,7 @@ class NukiMqttEvents {
       const e = this.codeMap[c.index];
       if (!e) continue;
       if (c.userIndex != null) e.userIndex = c.userIndex;
-      const name = c.name || `Home ${c.index}`;
-      if (e.name !== name) { e.name = name; e.synced = false; }
+      if (c.name && e.homeName !== c.name) e.homeName = c.name; // a name Home gave the person
     }
     this.saveCodes();
     this.syncCodesSoon();
@@ -386,8 +385,23 @@ class NukiMqttEvents {
     }, this.codeDelayMs ?? 3000); // Home sends the code and then the name — wait for both
   }
 
+  // Keypad names: "Apple Home" for a single code, "Apple Home 1", "Apple Home 2"... when there are more
+  // (codes that cannot go on the keypad are not counted). A name Home gives the person wins.
+  nameCodes() {
+    const base = (this.lockCfg && this.lockCfg.codeName) || 'Apple Home';
+    const active = Object.keys(this.codeMap)
+      .filter((i) => !this.codeMap[i].removed && !this.checkCode(String(this.codeMap[i].code || '')))
+      .sort((a, b) => Number(a) - Number(b));
+    active.forEach((i, n) => {
+      const e = this.codeMap[i];
+      const name = e.homeName || (active.length === 1 ? base : `${base} ${n + 1}`);
+      if (e.name !== name) { if (e.name) e.oldName = e.name; e.name = name; e.synced = false; }
+    });
+  }
+
   async syncCodes() {
     const web = this.web();
+    this.nameCodes();
     if (!web) { this.log.warn('Access codes: add the Nuki Web token (Child lock section) to send the codes to the Nuki Keypad'); return; }
     let retry = false;
     for (const [i, e] of Object.entries(this.codeMap)) {
@@ -405,7 +419,7 @@ class NukiMqttEvents {
           }
           delete this.codeMap[i];
         } else if (!e.synced) {
-          const name = e.name || `Home ${i}`;
+          const name = e.name || 'Apple Home';
           const why = this.checkCode(String(e.code || ''));
           if (why) {
             // Home keeps the code (it works for Home itself); it just cannot go on the Nuki Keypad
@@ -414,10 +428,12 @@ class NukiMqttEvents {
             e.skipped = e.code; e.synced = true; this.saveCodes();
             continue;
           }
+          if (!e.id) { const f = await web.findKeypadCode(e.code); if (f) e.id = f.id; } // already there (id not known yet)
           if (e.id && !(await web.listAuths()).some((a) => a.id === e.id)) { e.id = null; e.authId = null; } // deleted in the Nuki app: create it again
           if (e.id) {
             await web.updateKeypadCode(e.id, { name, code: e.code });
-            this.log.info(`Access codes: updated "${name}" on the Nuki Keypad`);
+            this.log.info(`Access codes: updated ${e.oldName && e.oldName !== name ? `"${e.oldName}" → ` : ''}"${name}" on the Nuki Keypad`);
+            delete e.oldName;
           } else {
             e.id = await web.addKeypadCode(name, e.code);
             const auth = e.id && (await web.listAuths()).find((a) => a.id === e.id);

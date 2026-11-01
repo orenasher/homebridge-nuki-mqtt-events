@@ -63,7 +63,7 @@ The change reaches the lock on its next sync with Nuki (usually within a minute)
 ## Access codes → Nuki Keypad (v1.13)
 
 The Matter lock carries Home's **Manage Access** section (people + PIN codes, like a native Matter lock).
-Every code added in Home is created on the Nuki Keypad through Nuki Web (with the person's name), renamed
+Every code added in Home is created on the Nuki Keypad through Nuki Web (named "Apple Home", or "Apple Home 1", "Apple Home 2"... when there are several), renamed
 or changed with it, and removed when it is removed in Home. A keypad unlock with such a code shows up in
 Home as that person.
 

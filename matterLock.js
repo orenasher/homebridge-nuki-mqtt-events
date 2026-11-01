@@ -62,7 +62,7 @@ async function startMatterLock(p, o) {
       vendorName: 'Oren Asher',
       vendorId: VendorId(0xfff1),
       nodeLabel: o.name.slice(0, 32),
-      productName: 'Nuki Door Lock (MQTT)',
+      productName: 'Nuki Door Lock',
       productLabel: 'Nuki Door Lock',
       productId: 0x8001,
       serialNumber: o.serial,
@@ -115,16 +115,11 @@ async function startMatterLock(p, o) {
         await p.onChildLock(op.actuation === 'lock');
       }
     }
-    let ChildDevice = DoorLockDevice.with(ChildLockServer);
-    try {
-      const { FixedLabelServer } = require('@matter/main/behaviors/fixed-label');
-      ChildDevice = ChildDevice.with(FixedLabelServer);
-    } catch (e) { /* label is cosmetic */ }
+    const ChildDevice = DoorLockDevice.with(ChildLockServer);
     const childInit = {
       id: 'childlock',
       doorLock: { lockState: o.childOn ? LockState.Locked : LockState.Unlocked, lockType: 0, actuatorEnabled: true, operatingMode: 0 },
     };
-    if (ChildDevice.behaviors && ChildDevice.behaviors.fixedLabel) childInit.fixedLabel = { labelList: [{ label: 'name', value: o.childLockName || 'Child Lock' }] };
     child = await node.add(ChildDevice, childInit);
   }
 

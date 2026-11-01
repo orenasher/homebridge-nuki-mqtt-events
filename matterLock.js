@@ -62,7 +62,7 @@ async function startMatterLock(p, o) {
     commissioning: { passcode: o.passcode, discriminator: o.discriminator },
     // With the child lock, the node is a bridge holding ONE bridged lock that has the child lock as a part
     // (that is how a Matter bridge such as the Aqara hub presents the U200: one accessory, child-lock section).
-    productDescription: { name: o.name, deviceType: o.childLock ? require('@matter/main/endpoints/aggregator').AggregatorEndpoint.deviceType : DoorLockDevice.deviceType },
+    productDescription: { name: o.name, deviceType: o.childLockBridged ? require('@matter/main/endpoints/aggregator').AggregatorEndpoint.deviceType : DoorLockDevice.deviceType },
     basicInformation: {
       vendorName: 'Oren Asher',
       vendorId: VendorId(0xfff1),
@@ -101,6 +101,7 @@ async function startMatterLock(p, o) {
         userCodeTemporaryDisableTime: 60,
         requirePinForRemoteOperation: false,
         enableOneTouchLocking: !!o.childOn,
+        supportedOperatingModes: { normal: false, vacation: false, privacy: false, noRemoteLockUnlock: false, passage: false, alwaysSet: 2047 },
       } : {}),
     },
     powerSource: {
@@ -117,7 +118,7 @@ async function startMatterLock(p, o) {
     },
   };
   let endpoint;
-  if (o.childLock) {
+  if (o.childLockBridged) {
     const { Endpoint } = main;
     const { AggregatorEndpoint } = require('@matter/main/endpoints/aggregator');
     const { BridgedDeviceBasicInformationServer } = require('@matter/main/behaviors/bridged-device-basic-information');
@@ -160,7 +161,7 @@ async function startMatterLock(p, o) {
   // Child lock as a second lock on the same Matter accessory (Home shows a secondary lock as its own
   // section with Locked / Unlocked inside the accessory page). Locked = the button on the Nuki is disabled.
   let child = null;
-  if (o.childLock) {
+  if (o.childLockBridged) {
     class ChildLockServer extends DoorLockServer {
       async handleLockOperation(op) {
         await p.onChildLock(op.actuation === 'lock');

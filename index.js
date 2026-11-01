@@ -17,10 +17,30 @@ const UNLOCKED_STATES = [3, 5, 6];
 
 module.exports = (api) => api.registerPlatform(PLUGIN, PLATFORM, NukiMqttEvents);
 
+
+const FINGERPRINT_SWITCH = { name: 'Nuki Fingerprint', sources: ['fingerprint'], actions: ['unlock', 'unlatch', 'locknGoUnlatch'] };
+
+// Ready-made setups ("Quick setup" in the settings). A config without a preset keeps working as before (custom).
+function applyPreset(cfg, log) {
+  const preset = cfg.preset || 'custom';
+  if (preset === 'custom') return cfg;
+  const c = JSON.parse(JSON.stringify(cfg));
+  const token = c.childLock && c.childLock.token;
+  const lock = preset === 'full' || preset === 'lock';
+  c.doorLock = { ...(c.doorLock || {}), enabled: lock };
+  if (lock) c.doorLock.accessCodes = !!token;
+  c.keypad = { ...(c.keypad || {}), enabled: preset === 'full' };
+  c.childLock = { ...(c.childLock || {}), enabled: lock && !!token, style: 'matter' };
+  if (preset === 'lock') c.noSwitches = true; // lock only: no extra switches
+  else if (!(Array.isArray(c.switches) && c.switches.length)) c.switches = [{ ...FINGERPRINT_SWITCH }];
+  if (log && lock && !token) log.info('Quick setup: add a Nuki Web token in the settings to get the child lock and keypad codes from Home');
+  return c;
+}
+
 class NukiMqttEvents {
   constructor(log, config, api) {
     this.log = log;
-    this.config = config || {};
+    this.config = applyPreset(config || {}, log);
     this.api = api;
     this.cached = new Map();
     this.switches = [];
@@ -60,7 +80,7 @@ class NukiMqttEvents {
 
   setup() {
     const { Service, Characteristic, uuid } = this.api.hap;
-    const defs = this.config.switches && this.config.switches.length
+    const defs = this.config.noSwitches ? [] : this.config.switches && this.config.switches.length
       ? this.config.switches
       : [{ name: 'Nuki Fingerprint', sources: ['fingerprint'] }];
     const keep = new Set();

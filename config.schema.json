@@ -2,10 +2,42 @@
   "pluginAlias": "NukiMqttEvents",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Momentary switches that turn on for a moment when the Nuki lock is opened by fingerprint or keypad code. Uses a built-in MQTT broker by default — no Home Assistant or Mosquitto needed. Point the Nuki app's MQTT host to this Homebridge server's IP.",
+  "headerDisplay": "**Nuki for Apple Home — set up in 3 steps**\n\n1. Pick a ready-made setup below.\n2. In the **Nuki app**: Smart Lock → Settings → Features & Configuration → **MQTT** → turn it on, Host = this Homebridge server's IP, Port = 1883 (leave user/password empty).\n3. Paste a **Nuki Web token** if your setup uses the child lock or keypad codes, save, restart Homebridge, and add the lock in the Home app with the code shown in the log.",
   "schema": {
     "type": "object",
     "properties": {
+      "preset": {
+        "title": "Quick setup",
+        "type": "string",
+        "default": "full",
+        "oneOf": [
+          {
+            "title": "⭐ Everything — lock in Apple Home, auto-lock after closing, child lock, keypad codes from Home, keypad battery, fingerprint switch",
+            "enum": [
+              "full"
+            ]
+          },
+          {
+            "title": "🔒 Lock only — lock in Apple Home with auto-lock after closing, child lock and keypad codes",
+            "enum": [
+              "lock"
+            ]
+          },
+          {
+            "title": "👆 Fingerprint switch only — a switch that turns on when someone opens with a fingerprint (e.g. to disarm an alarm)",
+            "enum": [
+              "fingerprint"
+            ]
+          },
+          {
+            "title": "⚙️ Custom — choose every feature yourself",
+            "enum": [
+              "custom"
+            ]
+          }
+        ],
+        "description": "One click: every feature of the template is turned on with good defaults. Choose Custom to pick features one by one."
+      },
       "name": {
         "title": "Name",
         "type": "string",
@@ -64,10 +96,10 @@
         "type": "string"
       },
       "deviceId": {
-        "title": "Nuki device ID",
+        "title": "Nuki ID (optional)",
         "type": "string",
         "placeholder": "4E2CC127",
-        "description": "Shown in the MQTT topics, e.g. nuki/4E2CC127/state. Optional with the built-in broker (learned from the first message)."
+        "description": "Found automatically. Only needed if you have more than one Nuki — it is the ID shown in the Nuki app (e.g. 4E2CC127)."
       },
       "topicPrefix": {
         "title": "Topic prefix",
@@ -86,7 +118,7 @@
         "default": true
       },
       "switches": {
-        "title": "Switches",
+        "title": "Fingerprint / code switches",
         "type": "array",
         "items": {
           "type": "object",
@@ -141,7 +173,8 @@
               "description": "Leave empty for everyone. Code IDs appear in the Homebridge log."
             }
           }
-        }
+        },
+        "description": "Each switch turns on for a moment when the lock is opened this way. Use it in a Home automation (e.g. disarm the alarm)."
       },
       "keypad": {
         "title": "Keypad accessory",
@@ -154,7 +187,7 @@
             "description": "A button with a battery: single press = fingerprint, double press = code. The Nuki only reports whether the keypad battery is low (no percentage), so Home shows 100% or 10% and a low-battery warning."
           },
           "name": {
-            "title": "Name",
+            "title": "Keypad name in Apple Home",
             "type": "string",
             "default": "Nuki Keypad"
           }
@@ -216,7 +249,7 @@
           "token": {
             "title": "Nuki Web API token",
             "type": "string",
-            "description": "web.nuki.io → API → Generate API token. Rights: View devices, View and edit devices, Manage device configuration, View and manage authorizations (for the keypad codes)."
+            "description": "Needed for the child lock and for keypad codes from Home. web.nuki.io → API → Generate API token, and tick only: View devices, View and edit devices, Manage device configuration, View and manage authorizations. Also enter the lock's PIN once in web.nuki.io."
           },
           "smartlockId": {
             "title": "Smart Lock ID (optional)",
@@ -242,15 +275,15 @@
             "description": "Runs a standalone Matter lock (own pairing code) that reports the door position. Lock/unlock commands go to the Nuki over MQTT — enable lock actions in the Nuki app's MQTT settings."
           },
           "name": {
-            "title": "Lock name",
+            "title": "Lock name in Apple Home",
             "type": "string",
             "default": "Front Door"
           },
           "doorSwitchName": {
-            "title": "Door-state switch name",
+            "title": "Door sensor switch name",
             "type": "string",
             "default": "Door Open",
-            "description": "A HomeKit switch the door position comes from. Create two Home automations: door sensor opens → turn this switch on; door sensor closes → turn it off."
+            "description": "A switch the plugin creates so any door sensor (Aqara, Eve…) can tell the lock if the door is open. In the Home app make two automations: door sensor opens → turn this switch on; door sensor closes → turn it off."
           },
           "lockAfterCloseSeconds": {
             "title": "Lock after closing (seconds, plugin fallback)",
@@ -303,5 +336,108 @@
         }
       }
     }
-  }
+  },
+  "layout": [
+    {
+      "type": "fieldset",
+      "title": "1 · Choose your setup",
+      "items": [
+        "preset"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "2 · Nuki Web (child lock & keypad codes)",
+      "condition": {
+        "functionBody": "return ['full','lock'].includes(model.preset || 'full') || (model.preset === 'custom' && ((model.childLock && model.childLock.enabled) || (model.doorLock && model.doorLock.enabled)));"
+      },
+      "items": [
+        "childLock.token"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "3 · Names in Apple Home",
+      "items": [
+        {
+          "key": "doorLock.name",
+          "condition": {
+            "functionBody": "return ['full','lock'].includes(model.preset || 'full') || (model.preset === 'custom' && model.doorLock && model.doorLock.enabled);"
+          }
+        },
+        {
+          "key": "doorLock.doorSwitchName",
+          "condition": {
+            "functionBody": "return ['full','lock'].includes(model.preset || 'full') || (model.preset === 'custom' && model.doorLock && model.doorLock.enabled);"
+          }
+        },
+        {
+          "key": "keypad.name",
+          "condition": {
+            "functionBody": "return (model.preset || 'full') === 'full' || (model.preset === 'custom' && model.keypad && model.keypad.enabled);"
+          }
+        },
+        {
+          "key": "childLock.name",
+          "condition": {
+            "functionBody": "return ['full','lock'].includes(model.preset || 'full') || (model.preset === 'custom' && model.doorLock && model.doorLock.enabled);"
+          }
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Features (Custom)",
+      "condition": {
+        "functionBody": "return model.preset === 'custom';"
+      },
+      "items": [
+        "doorLock.enabled",
+        "doorLock.accessCodes",
+        "childLock.enabled",
+        "childLock.style",
+        "keypad.enabled"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Fingerprint / code switches",
+      "expandable": true,
+      "expanded": false,
+      "condition": {
+        "functionBody": "return ['full','fingerprint'].includes(model.preset || 'full') || model.preset === 'custom';"
+      },
+      "items": [
+        "switches"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "deviceId",
+        "name",
+        "brokerMode",
+        "brokerPort",
+        "host",
+        "port",
+        "username",
+        "password",
+        "topicPrefix",
+        "resetMs",
+        "logEvents",
+        "doorLock.lockAfterCloseSeconds",
+        "doorLock.actionTimeout",
+        "doorLock.matterPort",
+        "doorLock.passcode",
+        "doorLock.discriminator",
+        "doorLock.matterLogLevel",
+        "childLock.lockName",
+        "childLock.smartlockId",
+        "childLock.pollMinutes"
+      ]
+    }
+  ]
 }

@@ -4,6 +4,20 @@ Momentary HomeKit switches that turn **on for ~1 second** whenever a Nuki Smart 
 
 Typical use: an Apple Home automation *"When Nuki Fingerprint turns on → set Security System to Off"* — so the alarm is disarmed only by fingerprint/code, never when the door is opened from inside or from the app.
 
+## Quick setup (v1.14)
+
+The settings page starts with **Quick setup** — pick one and everything in it is turned on with good defaults:
+
+| Setup | What you get |
+|---|---|
+| ⭐ Everything | Lock in Apple Home (Matter) with door position and auto-lock after closing, child lock, keypad codes from Home, keypad accessory with battery, fingerprint switch |
+| 🔒 Lock only | The lock with auto-lock after closing, child lock and keypad codes |
+| 👆 Fingerprint switch only | A switch that turns on when the door is opened with a fingerprint |
+| ⚙️ Custom | Choose every feature yourself (also what older configs use) |
+
+Then: turn on MQTT in the Nuki app (host = the Homebridge IP, port 1883), paste a Nuki Web token for the child lock / keypad codes,
+restart, and add the lock in the Home app with the code from the log. Everything technical is under **Advanced**.
+
 ## Fully standalone (v1.1+)
 The plugin includes its own **built-in MQTT broker**. No Home Assistant, Mosquitto or other script is needed:
 

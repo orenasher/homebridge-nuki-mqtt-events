@@ -72,9 +72,19 @@ class NukiWeb {
   async addKeypadCode(name, code) {
     const id = await this.findId();
     await request(this.token, 'PUT', `/smartlock/${id}/auth`, { name: name.slice(0, 20), type: 13, code: Number(code) });
-    // the create call returns no body: find the new entry by its code
-    const auth = (await this.listAuths()).find((a) => a.type === 13 && String(a.code) === String(code));
-    return auth ? auth.id : null;
+    // the create call returns no body and the entry shows up a little later: look for it by its code
+    for (const wait of [1000, 2000, 4000, 8000]) {
+      await new Promise((r) => setTimeout(r, this.lookupScale != null ? wait * this.lookupScale : wait));
+      const auth = await this.findKeypadCode(code);
+      if (auth) return auth.id;
+    }
+    return null;
+  }
+
+  async findKeypadCode(code, name) {
+    const list = (await this.listAuths()).filter((a) => a.type === 13);
+    return list.find((a) => a.code != null && String(a.code) === String(code))
+      || (name ? list.find((a) => a.name === name.slice(0, 20)) : null) || null;
   }
 
   async updateKeypadCode(authId, fields) {

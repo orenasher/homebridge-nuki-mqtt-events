@@ -393,9 +393,15 @@ class NukiMqttEvents {
     for (const [i, e] of Object.entries(this.codeMap)) {
       try {
         if (e.removed) {
+          if (!e.id && e.code && e.skipped !== e.code) {
+            const found = await web.findKeypadCode(e.code, e.name);
+            if (found) e.id = found.id;
+          }
           if (e.id) {
             try { await web.removeKeypadCode(e.id); } catch (err) { if (!/ 404:/.test(err.message)) throw err; } // already gone in the Nuki app
             this.log.info(`Access codes: removed "${e.name}" from the Nuki Keypad`);
+          } else if (e.code && e.skipped !== e.code && e.synced) {
+            this.log.warn(`Access codes: "${e.name}" was not found on Nuki Web — remove it in the Nuki app if it is still there`);
           }
           delete this.codeMap[i];
         } else if (!e.synced) {
@@ -416,7 +422,7 @@ class NukiMqttEvents {
             e.id = await web.addKeypadCode(name, e.code);
             const auth = e.id && (await web.listAuths()).find((a) => a.id === e.id);
             if (auth) e.authId = auth.authId;
-            this.log.info(`Access codes: added "${name}" to the Nuki Keypad`);
+            this.log.info(`Access codes: added "${name}" to the Nuki Keypad${e.id ? '' : ' (its Nuki Web entry will be looked up when needed)'}`);
           }
           e.synced = true;
         }

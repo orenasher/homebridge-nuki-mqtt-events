@@ -72,6 +72,12 @@ async function startMatterLock(p, o) {
 
   const b = o.battery || {};
   const behaviors = [NukiDoorLockServer, PowerSourceServer.with('Battery', 'Rechargeable')];
+  // Two lock endpoints side by side must carry semantic tags that tell them apart (Matter spec); the tag
+  // label also gives each one its name. Without them Home could not name the second lock while pairing.
+  const { DescriptorServer } = require('@matter/main/behaviors/descriptor');
+  const TaggedDescriptor = DescriptorServer.with('TagList');
+  const tag = (n, label) => ({ mfgCode: null, namespaceId: 0x07, tag: n, label: String(label).slice(0, 64) });
+  if (o.childLock) behaviors.push(TaggedDescriptor);
   const initial = {
     id: 'lock',
     doorLock: {
@@ -95,6 +101,7 @@ async function startMatterLock(p, o) {
       endpointList: [],
     },
   };
+  if (o.childLock) initial.descriptor = { tagList: [tag(1, o.name)] };
   const endpoint = await node.add(DoorLockDevice.with(...behaviors), initial);
 
   // Log what Home writes to the lock, so it is visible how "Lock After Closing" is configured.
@@ -115,9 +122,10 @@ async function startMatterLock(p, o) {
         await p.onChildLock(op.actuation === 'lock');
       }
     }
-    const ChildDevice = DoorLockDevice.with(ChildLockServer);
+    const ChildDevice = DoorLockDevice.with(ChildLockServer, TaggedDescriptor);
     const childInit = {
       id: 'childlock',
+      descriptor: { tagList: [tag(2, o.childLockName || 'Child Lock')] },
       doorLock: { lockState: o.childOn ? LockState.Locked : LockState.Unlocked, lockType: 0, actuatorEnabled: true, operatingMode: 0 },
     };
     child = await node.add(ChildDevice, childInit);

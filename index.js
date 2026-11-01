@@ -373,11 +373,25 @@ class NukiMqttEvents {
   // ---------- Matter lock ----------
 
   async startLock() {
+    const opts = { childLock: !!(this.childCfg && this.childCfg.style === 'matter') };
+    try {
+      this.matter = await this.openMatterLock(opts);
+      if (this.nukiState !== null) this.pushLockState();
+    } catch (e) {
+      this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
+      if (opts.childLock) {
+        this.log.warn('Matter lock: starting again without the child-lock profile');
+        try { this.matter = await this.openMatterLock({ childLock: false }); if (this.nukiState !== null) this.pushLockState(); } catch (e2) { this.log.error(`Matter lock could not start: ${e2.message}`); }
+      }
+    }
+  }
+
+  async openMatterLock(opts) {
     const c = this.lockCfg;
     const path = require('path');
-    try {
+    {
       const { startMatterLock } = require('./matterLock');
-      this.matter = await startMatterLock({
+      return startMatterLock({
         log: this.log,
         actuate: (a, why) => this.actuate(a, why),
         isDoorOpen: () => this.doorOpen,
@@ -392,14 +406,11 @@ class NukiMqttEvents {
         lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
         doorOpen: this.doorOpen,
         battery: this.battery,
-        childLock: !!(this.childCfg && this.childCfg.style === 'matter'),
+        childLock: opts.childLock,
         childLockName: this.childCfg && this.childCfg.name,
         childOn: this.childOn,
         matterLogLevel: c.matterLogLevel,
       });
-      if (this.nukiState !== null) this.pushLockState();
-    } catch (e) {
-      this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
     }
   }
 

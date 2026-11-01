@@ -41,7 +41,10 @@ async function startMatterLock(p, o) {
   vars.set('storage.path', o.storagePath);
   try { Logger.level = o.matterLogLevel || 'warn'; } catch (e) { /* older matter.js */ }
 
-  class NukiDoorLockServer extends DoorLockServer.with('DoorPositionSensor') {
+  // With the child lock on, the lock uses the same Matter profile as the Aqara U200 (users, PIN, remote
+  // credentials + one-touch locking, wrong-code limit...), whose Home page shows a Child Lock control.
+  const features = o.childLock ? ['DoorPositionSensor', 'User', 'PinCredential', 'CredentialOverTheAirAccess'] : ['DoorPositionSensor'];
+  class NukiDoorLockServer extends DoorLockServer.with(...features) {
     // Called by matter.js for Home commands (source Remote) and for its own auto-relock (source Auto).
     async handleLockOperation(op) {
       const auto = Number(op.source) === 4; // OperationSource.Auto (7 = Remote)
@@ -77,7 +80,6 @@ async function startMatterLock(p, o) {
   const { DescriptorServer } = require('@matter/main/behaviors/descriptor');
   const TaggedDescriptor = DescriptorServer.with('TagList');
   const tag = (n, label) => ({ mfgCode: null, namespaceId: 0x07, tag: n, label: String(label).slice(0, 64) });
-  if (o.childLock) behaviors.push(TaggedDescriptor);
   const initial = {
     id: 'lock',
     doorLock: {
@@ -87,6 +89,17 @@ async function startMatterLock(p, o) {
       operatingMode: 0,
       doorState: o.doorOpen ? DoorState.Open : DoorState.Closed,
       autoRelockTime: 0,
+      ...(o.childLock ? {
+        numberOfTotalUsersSupported: 10,
+        numberOfPinUsersSupported: 10,
+        numberOfCredentialsSupportedPerUser: 5,
+        minPinCodeLength: 4,
+        maxPinCodeLength: 8,
+        wrongCodeEntryLimit: 5,
+        userCodeTemporaryDisableTime: 60,
+        requirePinForRemoteOperation: false,
+        enableOneTouchLocking: !!o.childOn,
+      } : {}),
     },
     powerSource: {
       status: 1, // Active
@@ -101,11 +114,23 @@ async function startMatterLock(p, o) {
       endpointList: [],
     },
   };
-  if (o.childLock) initial.descriptor = { tagList: [tag(1, o.name)] };
   const endpoint = await node.add(DoorLockDevice.with(...behaviors), initial);
 
   // Log what Home writes to the lock, so it is visible how "Lock After Closing" is configured.
   const ev = endpoint.events.doorLock;
+  if (o.childLock) {
+    const skip = new Set(['lockState$Changed', 'doorState$Changed', 'doorOpenEvents$Changed', 'doorClosedEvents$Changed']);
+    for (const k of Object.keys(ev)) {
+      if (!k.endsWith('$Changed') || skip.has(k) || k.startsWith('autoRelockTime') || k.startsWith('operatingMode')) continue;
+      ev[k].on((v) => {
+        if (endpoint.__fromPlugin) return;
+        p.log.info(`Matter lock: Home set ${k.replace('$Changed', '')} = ${JSON.stringify(v)}`);
+        if (k === 'enableOneTouchLocking$Changed' && p.onChildLock) {
+          Promise.resolve(p.onChildLock(!!v)).catch((e) => p.log.warn(`Matter lock: child lock: ${e.message}`));
+        }
+      });
+    }
+  }
   if (ev.autoRelockTime$Changed) {
     ev.autoRelockTime$Changed.on((v) => p.log.info(`Matter lock: Home set autoRelockTime = ${v} s`));
   }
@@ -116,7 +141,7 @@ async function startMatterLock(p, o) {
   // Child lock as a second lock on the same Matter accessory (Home shows a secondary lock as its own
   // section with Locked / Unlocked inside the accessory page). Locked = the button on the Nuki is disabled.
   let child = null;
-  if (o.childLock) {
+  if (o.childLock && o.childLockSecondEndpoint) {
     class ChildLockServer extends DoorLockServer {
       async handleLockOperation(op) {
         await p.onChildLock(op.actuation === 'lock');
@@ -179,6 +204,10 @@ async function startMatterLock(p, o) {
     },
     async setChildLock(on) {
       if (child) await child.set({ doorLock: { lockState: on ? LockState.Locked : LockState.Unlocked } });
+      else if (o.childLock) {
+        endpoint.__fromPlugin = true;
+        try { await endpoint.set({ doorLock: { enableOneTouchLocking: !!on } }); } finally { endpoint.__fromPlugin = false; }
+      }
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

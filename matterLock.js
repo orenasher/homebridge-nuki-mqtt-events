@@ -70,6 +70,7 @@ async function startMatterLock(p, o) {
     }
 
     setCredential(request) {
+      if (o.accessCodes) p.log.info(`Matter lock: Home setCredential op=${request.operationType} type=${request.credential && request.credential.credentialType} index=${request.credential && request.credential.credentialIndex} user=${request.userIndex}`);
       const isPin = request.credential && request.credential.credentialType === PIN && request.credentialData;
       const code = isPin ? Buffer.from(request.credentialData).toString('utf8') : null;
       if (isPin && p.checkCode) {
@@ -85,14 +86,17 @@ async function startMatterLock(p, o) {
     }
 
     setUser(request) {
+      if (o.accessCodes) p.log.info(`Matter lock: Home setUser op=${request.operationType} user=${request.userIndex} status=${request.userStatus}`);
       return Promise.resolve(super.setUser(request)).then((r) => { changed(this); return r; });
     }
 
     clearUser(request) {
+      if (o.accessCodes) p.log.info(`Matter lock: Home clearUser user=${request.userIndex}`);
       return Promise.resolve(super.clearUser(request)).then((r) => { changed(this); return r; });
     }
 
     clearCredential(request) {
+      if (o.accessCodes) p.log.info(`Matter lock: Home clearCredential ${request.credential ? `type=${request.credential.credentialType} index=${request.credential.credentialIndex}` : 'all'}`);
       return Promise.resolve(super.clearCredential(request)).then((r) => { changed(this); return r; });
     }
   }
@@ -278,7 +282,10 @@ async function startMatterLock(p, o) {
         try { await node.set({ basicInformation: { localConfigDisabled: !!on } }); } finally { node.__fromPlugin = false; }
       }
     },
-    codes() { return o.accessCodes ? snapshot(endpoint.state.doorLock) : []; },
+    codes() {
+      const st = endpoint.state.doorLock;
+      return o.accessCodes && Array.isArray(st.credentials) && Array.isArray(st.users) ? snapshot(st) : null;
+    },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },
     async close() { await node.close(); },

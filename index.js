@@ -49,7 +49,7 @@ class NukiMqttEvents {
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
-      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearInterval(this.codeCheck);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -520,6 +520,19 @@ class NukiMqttEvents {
     try {
       this.matter = await this.openMatterLock(opts);
       if (this.nukiState !== null) this.pushLockState();
+      // Safety net: compare Home's codes with what was sent to the keypad every minute
+      if (this.lockCfg.accessCodes !== false && this.matter.codes) {
+        const check = () => {
+          try {
+            const list = this.matter.codes();
+            if (!list || !this.codeMap) return;
+            const known = Object.keys(this.codeMap).filter((i) => !this.codeMap[i].removed);
+            const now = new Set(list.map((c) => String(c.index)));
+            if (known.some((i) => !now.has(i))) { this.log.info('Access codes: a code was removed in Home'); this.onCodes(list, {}); }
+          } catch (e) { this.log.warn(`Access codes: ${e.message}`); }
+        };
+        this.codeCheck = setInterval(check, this.codeCheckMs ?? 60000);
+      }
     } catch (e) {
       this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
       if (opts.childLock || this.lockCfg.accessCodes !== false) {

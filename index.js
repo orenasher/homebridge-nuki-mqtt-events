@@ -94,7 +94,9 @@ class NukiMqttEvents {
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
-    if (this.childCfg) keep.add(this.setupChildLock());
+    if (this.childCfg) {
+      try { keep.add(this.setupChildLock()); } catch (e) { this.log.error(`Child lock setup failed: ${e.stack || e.message}`); }
+    }
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
@@ -211,8 +213,10 @@ class NukiMqttEvents {
     mgmt.getCharacteristic(Characteristic.Version).onGet(() => '1.0');
     mgmt.getCharacteristic(Characteristic.LockControlPoint).onSet(() => {});
     const addChar = (svc, C) => (svc.testCharacteristic(C) ? svc.getCharacteristic(C) : svc.addCharacteristic(C));
+    // HAP-NodeJS names it LockManagementAutoSecurityTimeout
+    const AutoTimeout = Characteristic.LockManagementAutoSecurityTimeout || Characteristic.AutoSecurityTimeout;
     this.hapAutoLock = Number(acc.context.autoLock ?? (this.lockCfg && this.lockCfg.lockAfterCloseSeconds) ?? 0) || 0;
-    addChar(mgmt, Characteristic.AutoSecurityTimeout)
+    addChar(mgmt, AutoTimeout)
       .onGet(() => this.hapAutoLock)
       .onSet((v) => {
         this.hapAutoLock = Number(v) || 0;

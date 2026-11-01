@@ -152,7 +152,7 @@ class NukiMqttEvents {
   setupChildLock() {
     const { Service, Characteristic, uuid } = this.api.hap;
     const name = this.childCfg.name || 'Child Lock';
-    const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:child-lock`);
+    const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:${this.childCfg.style === 'lock' ? 'hap-lock' : 'child-lock'}`);
     let acc = this.cached.get(id);
     if (!acc) {
       acc = new this.api.platformAccessory(name, id);
@@ -162,31 +162,91 @@ class NukiMqttEvents {
       .setCharacteristic(Characteristic.Manufacturer, 'Nuki')
       .setCharacteristic(Characteristic.Model, 'Child Lock (button disabled)')
       .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-child-lock`);
-    const svc = acc.getService(Service.Switch) || acc.addService(Service.Switch, name);
     this.childOn = acc.context.childOn === true;
+    if (this.childCfg.style === 'lock') return this.setupHapLock(acc, id);
+    const svc = acc.getService(Service.Switch) || acc.addService(Service.Switch, name);
     svc.getCharacteristic(Characteristic.On)
       .onGet(() => this.childOn)
-      .onSet(async (v) => {
-        const on = !!v;
-        this.log.info(`Child lock ${on ? 'ON — disabling' : 'OFF — enabling'} the button on the Smart Lock`);
-        try {
-          await this.nukiWeb.setButtonEnabled(!on);
-          this.childPendingUntil = Date.now() + 20 * 60000; // the lock reports the new value only after it syncs
-          this.setChild(on);
-        } catch (e) {
-          this.log.error(`Child lock: ${e.message}`);
-          throw new this.api.hap.HapStatusError(-70402);
-        }
-      });
+      .onSet((v) => this.applyChild(!!v));
     this.childAcc = acc;
     this.childSvc = svc;
     return id;
+  }
+
+  async applyChild(on) {
+    this.log.info(`Child lock ${on ? 'ON — disabling' : 'OFF — enabling'} the button on the Smart Lock`);
+    try {
+      await this.nukiWeb.setButtonEnabled(!on);
+      this.childPendingUntil = Date.now() + 20 * 60000; // the lock reports the new value only after it syncs
+      this.setChild(on);
+    } catch (e) {
+      this.log.error(`Child lock: ${e.message}`);
+      throw new this.api.hap.HapStatusError(-70402);
+    }
+  }
+
+  // HomeKit lock with the child lock inside it (LockPhysicalControls), plus battery and jammed state.
+  setupHapLock(acc, id) {
+    const { Service, Characteristic } = this.api.hap;
+    const name = this.childCfg.lockName || 'Nuki';
+    acc.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.Model, 'Smart Lock (MQTT)');
+    const lock = acc.getService(Service.LockMechanism) || acc.addService(Service.LockMechanism, name);
+    lock.getCharacteristic(Characteristic.LockCurrentState).onGet(() => this.hapCurrent());
+    lock.getCharacteristic(Characteristic.LockTargetState)
+      .onGet(() => (this.nukiState === 1 ? 1 : UNLOCKED_STATES.includes(this.nukiState) ? 0 : this.hapTarget ?? 1))
+      .onSet(async (v) => {
+        const action = Number(v) === 1 ? 'lock' : 'unlock';
+        if (action === 'lock' && this.doorOpen === true) {
+          this.log.warn('HomeKit lock: refused to lock while the door is open');
+          throw new this.api.hap.HapStatusError(-70402);
+        }
+        this.hapTarget = Number(v);
+        this.actuate(action, 'Home (HomeKit lock)').catch((e) => this.log.warn(`HomeKit lock: ${e.message}`));
+      });
+    const plc = lock.testCharacteristic(Characteristic.LockPhysicalControls)
+      ? lock.getCharacteristic(Characteristic.LockPhysicalControls)
+      : lock.addCharacteristic(Characteristic.LockPhysicalControls);
+    plc.onGet(() => (this.childOn ? 1 : 0))
+      .onSet((v) => this.applyChild(Number(v) === 1));
+    const bat = acc.getService(Service.Battery) || acc.addService(Service.Battery, `${name} Battery`);
+    bat.getCharacteristic(Characteristic.BatteryLevel).onGet(() => this.battery.percent ?? 100);
+    bat.getCharacteristic(Characteristic.StatusLowBattery).onGet(() => (this.battery.critical || (this.battery.percent ?? 100) <= 20 ? 1 : 0));
+    bat.getCharacteristic(Characteristic.ChargingState).onGet(() => (this.battery.charging ? 1 : 0));
+    this.childAcc = acc;
+    this.hapLock = lock;
+    this.hapBat = bat;
+    return id;
+  }
+
+  hapCurrent() {
+    const s = this.nukiState;
+    if (s === 1) return 1; // secured
+    if (UNLOCKED_STATES.includes(s)) return 0; // unsecured
+    if (s === 254) return 2; // jammed
+    return 3; // unknown
+  }
+
+  updateHapLock() {
+    if (!this.hapLock) return;
+    const C = this.api.hap.Characteristic;
+    const cur = this.hapCurrent();
+    this.hapLock.updateCharacteristic(C.LockCurrentState, cur);
+    if (cur === 0 || cur === 1) { this.hapTarget = cur; this.hapLock.updateCharacteristic(C.LockTargetState, cur); }
+  }
+
+  updateHapBattery() {
+    if (!this.hapBat) return;
+    const C = this.api.hap.Characteristic, b = this.battery;
+    if (b.percent != null) this.hapBat.updateCharacteristic(C.BatteryLevel, b.percent);
+    this.hapBat.updateCharacteristic(C.StatusLowBattery, b.critical || (b.percent ?? 100) <= 20 ? 1 : 0);
+    this.hapBat.updateCharacteristic(C.ChargingState, b.charging ? 1 : 0);
   }
 
   setChild(on) {
     this.childOn = on;
     if (this.childAcc) this.childAcc.context.childOn = on;
     if (this.childSvc) this.childSvc.updateCharacteristic(this.api.hap.Characteristic.On, on);
+    if (this.hapLock) this.hapLock.updateCharacteristic(this.api.hap.Characteristic.LockPhysicalControls, on ? 1 : 0);
   }
 
   startChildLock() {
@@ -306,6 +366,7 @@ class NukiMqttEvents {
   }
 
   pushLockState() {
+    this.updateHapLock();
     const s = NUKI_TO_MATTER[this.nukiState];
     if (s === undefined || !this.matter) return;
     if (this.nukiState === 254) {
@@ -405,6 +466,7 @@ class NukiMqttEvents {
     else return;
     if (JSON.stringify(b) === before) return;
     this.log.info(`Nuki battery: ${b.percent ?? '?'}%${b.charging ? ', charging' : ''}${b.critical ? ', CRITICAL' : ''}`);
+    this.updateHapBattery();
     if (this.matter) this.matter.setBattery(b).catch((e) => this.log.warn(`Matter lock: could not update battery: ${e.message}`));
   }
 
@@ -426,7 +488,7 @@ class NukiMqttEvents {
     } else if (topicMatches(this.stateTopic(), topic)) {
       this.learnId(topic);
       this.onNukiState(payload);
-    } else if (this.lockCfg && topicMatches(this.batteryTopic(), topic)) {
+    } else if ((this.lockCfg || this.hapLock) && topicMatches(this.batteryTopic(), topic)) {
       this.onBattery(topic.split('/').pop(), payload);
     }
   }
@@ -451,7 +513,7 @@ class NukiMqttEvents {
     for (const [t, b] of this.broker.retained) {
       if (t.endsWith('/keypadBatteryCritical') && topicMatches(this.batteryTopic(), t)) this.onKeypadBattery(b.toString());
       else if (topicMatches(this.stateTopic(), t)) { this.learnId(t); this.onNukiState(b.toString().trim()); }
-      else if (this.lockCfg && topicMatches(this.batteryTopic(), t)) this.onBattery(t.split('/').pop(), b.toString());
+      else if ((this.lockCfg || this.hapLock) && topicMatches(this.batteryTopic(), t)) this.onBattery(t.split('/').pop(), b.toString());
     }
     let saveTimer = null;
     this.broker.on('retainChanged', () => {
@@ -482,7 +544,7 @@ class NukiMqttEvents {
     const c = this.config;
     const url = `mqtt://${c.host || '127.0.0.1'}:${c.port || 1883}`;
     const topics = [this.eventTopic()];
-    if (this.lockCfg) topics.push(this.stateTopic(), this.batteryTopic());
+    if (this.lockCfg || this.hapLock) topics.push(this.stateTopic(), this.batteryTopic());
     else if (this.keypadCfg) topics.push(`${this.prefix}/${this.config.deviceId || '+'}/keypadBatteryCritical`);
     this.client = mqtt.connect(url, {
       username: c.username || undefined,

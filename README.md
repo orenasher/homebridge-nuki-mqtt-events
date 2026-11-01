@@ -58,6 +58,8 @@ Optional (**Child lock** in the settings): a switch that turns the physical butt
 
 The change reaches the lock on its next sync with Nuki (usually within a minute).
 
+**Show as:** a separate switch, or *inside a HomeKit lock* — an extra HomeKit lock for the same door with a **Child Lock** row (HomeKit `LockPhysicalControls`), the battery and the jammed state. Matter locks have no child-lock setting, so it cannot be added to the Matter lock itself.
+
 ## Event format (Nuki MQTT API v1.6)
 `LockAction,Trigger,AuthID,CodeID,KeypadSource` — keypad source `1` = code, `2` = fingerprint.
 

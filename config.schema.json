@@ -170,10 +170,41 @@
             "default": false,
             "description": "Turns the physical button on the Smart Lock off and on through the Nuki Web API (cloud). Needs Nuki Web enabled for the lock, its PIN entered in web.nuki.io, and an API token."
           },
+          "style": {
+            "title": "Show as",
+            "type": "string",
+            "default": "switch",
+            "oneOf": [
+              {
+                "title": "A separate switch",
+                "enum": [
+                  "switch"
+                ]
+              },
+              {
+                "title": "Inside a HomeKit lock (Child Lock row on the lock, with battery and jammed state)",
+                "enum": [
+                  "lock"
+                ]
+              }
+            ]
+          },
           "name": {
             "title": "Name",
             "type": "string",
-            "default": "Child Lock"
+            "default": "Child Lock",
+            "condition": {
+              "functionBody": "return model.childLock && model.childLock.style !== 'lock';"
+            }
+          },
+          "lockName": {
+            "title": "Lock name",
+            "type": "string",
+            "default": "Nuki",
+            "condition": {
+              "functionBody": "return model.childLock && model.childLock.style === 'lock';"
+            },
+            "description": "An extra HomeKit lock for the same door (Matter has no child-lock setting, so it cannot be added to the Matter lock)."
           },
           "token": {
             "title": "Nuki Web API token",

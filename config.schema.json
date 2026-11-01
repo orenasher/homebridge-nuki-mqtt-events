@@ -161,7 +161,7 @@
         }
       },
       "childLock": {
-        "title": "Child lock (disable the button on the lock)",
+        "title": "Child lock + Nuki Web (button on the lock, keypad codes)",
         "type": "object",
         "properties": {
           "enabled": {
@@ -173,10 +173,10 @@
           "style": {
             "title": "Show as",
             "type": "string",
-            "default": "switch",
+            "default": "matter",
             "oneOf": [
               {
-                "title": "Inside the Matter lock (Front Door) — as a second lock section",
+                "title": "Child Lock row inside Front Door (recommended — no extra accessory)",
                 "enum": [
                   "matter"
                 ]
@@ -188,7 +188,7 @@
                 ]
               },
               {
-                "title": "Inside a HomeKit lock (experimental: Child Lock and Auto-Lock on the lock, with battery and jammed state)",
+                "title": "Inside a separate HomeKit lock (old, not recommended)",
                 "enum": [
                   "lock"
                 ]
@@ -216,7 +216,7 @@
           "token": {
             "title": "Nuki Web API token",
             "type": "string",
-            "description": "web.nuki.io → API → Generate API token. Rights: View devices, View and edit devices, Manage device configuration."
+            "description": "web.nuki.io → API → Generate API token. Rights: View devices, View and edit devices, Manage device configuration, View and manage authorizations (for the keypad codes)."
           },
           "smartlockId": {
             "title": "Smart Lock ID (optional)",

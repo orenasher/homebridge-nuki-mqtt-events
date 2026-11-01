@@ -48,6 +48,16 @@ Note: Apple may show Lock After Closing only for certain locks; this is experime
 
 Optional (**Keypad accessory** in the settings): the keypad as its own accessory — a button that fires a single press for a fingerprint and a double press for a code, plus a battery. The Nuki only reports whether the keypad battery is low (`keypadBatteryCritical`), not a percentage, so Home shows 100% or 10% and a low-battery warning you can automate on.
 
+## Child lock (v1.4)
+
+Optional (**Child lock** in the settings): a switch that turns the physical button on the Smart Lock off (switch on) and back on (switch off). The Nuki MQTT API cannot change settings, so this goes through the **Nuki Web API** (cloud):
+
+1. In the Nuki app, enable Nuki Web for the lock; in web.nuki.io enter the lock's PIN.
+2. web.nuki.io → API → Generate API token, with only: View devices, View and edit devices, Manage device configuration.
+3. Paste the token in the plugin settings. The lock is found automatically from the Nuki device ID.
+
+The change reaches the lock on its next sync with Nuki (usually within a minute).
+
 ## Event format (Nuki MQTT API v1.6)
 `LockAction,Trigger,AuthID,CodeID,KeypadSource` — keypad source `1` = code, `2` = fingerprint.
 

@@ -160,6 +160,39 @@
           }
         }
       },
+      "childLock": {
+        "title": "Child lock (disable the button on the lock)",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "title": "Show a child-lock switch",
+            "type": "boolean",
+            "default": false,
+            "description": "Turns the physical button on the Smart Lock off and on through the Nuki Web API (cloud). Needs Nuki Web enabled for the lock, its PIN entered in web.nuki.io, and an API token."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "default": "Child Lock"
+          },
+          "token": {
+            "title": "Nuki Web API token",
+            "type": "string",
+            "description": "web.nuki.io → API → Generate API token. Rights: View devices, View and edit devices, Manage device configuration."
+          },
+          "smartlockId": {
+            "title": "Smart Lock ID (optional)",
+            "type": "string",
+            "description": "Found automatically from the Nuki device ID."
+          },
+          "pollMinutes": {
+            "title": "Check Nuki Web every (minutes)",
+            "type": "integer",
+            "default": 10,
+            "minimum": 2
+          }
+        }
+      },
       "doorLock": {
         "title": "Matter door lock with door position (for iOS 27.2 \"Lock After Closing\")",
         "type": "object",

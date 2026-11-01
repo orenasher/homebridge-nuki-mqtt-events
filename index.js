@@ -33,6 +33,8 @@ class NukiMqttEvents {
     this.lockCfg = this.config.doorLock && this.config.doorLock.enabled ? this.config.doorLock : null;
     this.keypadCfg = this.config.keypad && this.config.keypad.enabled ? this.config.keypad : null;
     this.keypadLow = false;
+    this.childCfg = this.config.childLock && this.config.childLock.enabled && this.config.childLock.token ? this.config.childLock : null;
+    this.childOn = false;
     this.doorOpen = null;
     this.relockTimer = null;
     this.matter = null;
@@ -41,9 +43,11 @@ class NukiMqttEvents {
       this.setup();
       if (this.mode === 'embedded') this.startBroker(); else this.connect();
       if (this.lockCfg) this.startLock();
+      if (this.childCfg) this.startChildLock();
     });
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
+      clearInterval(this.childPoll);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -89,6 +93,7 @@ class NukiMqttEvents {
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
+    if (this.childCfg) keep.add(this.setupChildLock());
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
@@ -140,6 +145,68 @@ class NukiMqttEvents {
     const ev = source === SOURCES.fingerprint ? 0 : source === SOURCES.code ? 1 : null;
     if (ev === null) return;
     this.keypadBtn.updateCharacteristic(this.api.hap.Characteristic.ProgrammableSwitchEvent, ev);
+  }
+
+  // ---------- Child lock: disables the button on the Smart Lock (Nuki Web API, cloud) ----------
+
+  setupChildLock() {
+    const { Service, Characteristic, uuid } = this.api.hap;
+    const name = this.childCfg.name || 'Child Lock';
+    const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:child-lock`);
+    let acc = this.cached.get(id);
+    if (!acc) {
+      acc = new this.api.platformAccessory(name, id);
+      this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
+    }
+    acc.getService(Service.AccessoryInformation)
+      .setCharacteristic(Characteristic.Manufacturer, 'Nuki')
+      .setCharacteristic(Characteristic.Model, 'Child Lock (button disabled)')
+      .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-child-lock`);
+    const svc = acc.getService(Service.Switch) || acc.addService(Service.Switch, name);
+    this.childOn = acc.context.childOn === true;
+    svc.getCharacteristic(Characteristic.On)
+      .onGet(() => this.childOn)
+      .onSet(async (v) => {
+        const on = !!v;
+        this.log.info(`Child lock ${on ? 'ON — disabling' : 'OFF — enabling'} the button on the Smart Lock`);
+        try {
+          await this.nukiWeb.setButtonEnabled(!on);
+          this.childPendingUntil = Date.now() + 20 * 60000; // the lock reports the new value only after it syncs
+          this.setChild(on);
+        } catch (e) {
+          this.log.error(`Child lock: ${e.message}`);
+          throw new this.api.hap.HapStatusError(-70402);
+        }
+      });
+    this.childAcc = acc;
+    this.childSvc = svc;
+    return id;
+  }
+
+  setChild(on) {
+    this.childOn = on;
+    if (this.childAcc) this.childAcc.context.childOn = on;
+    if (this.childSvc) this.childSvc.updateCharacteristic(this.api.hap.Characteristic.On, on);
+  }
+
+  startChildLock() {
+    const { NukiWeb } = require('./nukiWeb');
+    this.nukiWeb = new NukiWeb(this.childCfg.token, this.config.deviceId || this.nukiId, this.childCfg.smartlockId);
+    // Nuki Web keeps the setting it was given; read it back so changes made in the Nuki app show up too.
+    const poll = async () => {
+      try {
+        if (!this.nukiWeb.nukiIdHex && this.nukiId) this.nukiWeb.nukiIdHex = this.nukiId.toLowerCase();
+        const lock = await this.nukiWeb.get();
+        const on = lock.config && lock.config.buttonEnabled === false;
+        if (on === this.childOn) { this.childPendingUntil = 0; return; }
+        if (Date.now() < (this.childPendingUntil || 0)) return; // our change is still on its way to the lock
+        { this.log.info(`Child lock is ${on ? 'ON' : 'OFF'} (from Nuki Web)`); this.setChild(on); }
+      } catch (e) {
+        this.log.warn(`Child lock: ${e.message}`);
+      }
+    };
+    setTimeout(poll, 5000);
+    this.childPoll = setInterval(poll, (Number(this.childCfg.pollMinutes) || 10) * 60000);
   }
 
   // ---------- Door state input (fed by a Home automation from any door sensor, e.g. Aqara) ----------

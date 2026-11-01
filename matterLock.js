@@ -56,7 +56,14 @@ async function startMatterLock(p, o) {
   };
   const changed = (self, codes) => {
     if (!o.accessCodes || !p.onCodes) return;
-    try { p.onCodes(snapshot(self.state), codes || {}); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
+    if (codes) {
+      try { p.onCodes(snapshot(self.state), codes); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
+      return;
+    }
+    // removals: read the stored state once the command has been committed
+    setTimeout(() => {
+      try { if (endpoint) p.onCodes(snapshot(endpoint.state.doorLock), {}); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
+    }, 1000);
   };
   class NukiDoorLockServer extends DoorLockServer.with(...features) {
     // Called by matter.js for Home commands (source Remote) and for its own auto-relock (source Auto).

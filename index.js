@@ -31,7 +31,6 @@ class NukiMqttEvents {
     this.nukiState = null;
     this.stateWaiters = new Set();
     this.lockCfg = this.config.doorLock && this.config.doorLock.enabled ? this.config.doorLock : null;
-    if (this.config.childLock && this.config.childLock.style === 'matter') this.config.childLock.style = 'lock'; // removed experiment
     this.keypadCfg = this.config.keypad && this.config.keypad.enabled ? this.config.keypad : null;
     this.keypadLow = false;
     this.childCfg = this.config.childLock && this.config.childLock.enabled && this.config.childLock.token ? this.config.childLock : null;
@@ -94,7 +93,7 @@ class NukiMqttEvents {
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
-    if (this.childCfg) {
+    if (this.childCfg && this.childCfg.style !== 'matter') {
       try { keep.add(this.setupChildLock()); } catch (e) { this.log.error(`Child lock setup failed: ${e.stack || e.message}`); }
     }
 
@@ -227,6 +226,15 @@ class NukiMqttEvents {
       .onGet(() => (this.childOn ? 1 : 0))
       .onSet((v) => this.applyChild(Number(v) === 1));
     this.hapMgmt = mgmt;
+    // Child lock as a secondary lock service ("Child Lock" section with Locked / Unlocked in the accessory)
+    const childName = this.childCfg.name || 'Child Lock';
+    const child = acc.getServiceById(Service.LockMechanism, 'child') || acc.addService(Service.LockMechanism, childName, 'child');
+    child.getCharacteristic(Characteristic.LockCurrentState).onGet(() => (this.childOn ? 1 : 0));
+    child.getCharacteristic(Characteristic.LockTargetState)
+      .onGet(() => (this.childOn ? 1 : 0))
+      .onSet((v) => this.applyChild(Number(v) === 1));
+    lock.setPrimaryService(true);
+    this.hapChild = child;
     const bat = acc.getService(Service.Battery) || acc.addService(Service.Battery, `${name} Battery`);
     bat.getCharacteristic(Characteristic.BatteryLevel).onGet(() => this.battery.percent ?? 100);
     bat.getCharacteristic(Characteristic.StatusLowBattery).onGet(() => (this.battery.critical || (this.battery.percent ?? 100) <= 20 ? 1 : 0));
@@ -266,6 +274,12 @@ class NukiMqttEvents {
     if (this.childAcc) this.childAcc.context.childOn = on;
     if (this.childSvc) this.childSvc.updateCharacteristic(this.api.hap.Characteristic.On, on);
     if (this.hapMgmt) this.hapMgmt.updateCharacteristic(this.api.hap.Characteristic.LockPhysicalControls, on ? 1 : 0);
+    if (this.hapChild) {
+      const C = this.api.hap.Characteristic;
+      this.hapChild.updateCharacteristic(C.LockCurrentState, on ? 1 : 0);
+      this.hapChild.updateCharacteristic(C.LockTargetState, on ? 1 : 0);
+    }
+    if (this.matter && this.matter.setChildLock) this.matter.setChildLock(on).catch(() => {});
   }
 
   startChildLock() {
@@ -367,6 +381,7 @@ class NukiMqttEvents {
         log: this.log,
         actuate: (a, why) => this.actuate(a, why),
         isDoorOpen: () => this.doorOpen,
+        onChildLock: (on) => this.applyChild(on),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,
@@ -377,6 +392,9 @@ class NukiMqttEvents {
         lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
         doorOpen: this.doorOpen,
         battery: this.battery,
+        childLock: !!(this.childCfg && this.childCfg.style === 'matter'),
+        childLockName: this.childCfg && this.childCfg.name,
+        childOn: this.childOn,
         matterLogLevel: c.matterLogLevel,
       });
       if (this.nukiState !== null) this.pushLockState();

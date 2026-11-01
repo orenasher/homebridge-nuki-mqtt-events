@@ -106,6 +106,28 @@ async function startMatterLock(p, o) {
     ev.operatingMode$Changed.on((v) => p.log.info(`Matter lock: Home set operatingMode = ${v}`));
   }
 
+  // Child lock as a second lock on the same Matter accessory (Home shows a secondary lock as its own
+  // section with Locked / Unlocked inside the accessory page). Locked = the button on the Nuki is disabled.
+  let child = null;
+  if (o.childLock) {
+    class ChildLockServer extends DoorLockServer {
+      async handleLockOperation(op) {
+        await p.onChildLock(op.actuation === 'lock');
+      }
+    }
+    let ChildDevice = DoorLockDevice.with(ChildLockServer);
+    try {
+      const { FixedLabelServer } = require('@matter/main/behaviors/fixed-label');
+      ChildDevice = ChildDevice.with(FixedLabelServer);
+    } catch (e) { /* label is cosmetic */ }
+    const childInit = {
+      id: 'childlock',
+      doorLock: { lockState: o.childOn ? LockState.Locked : LockState.Unlocked, lockType: 0, actuatorEnabled: true, operatingMode: 0 },
+    };
+    if (ChildDevice.behaviors && ChildDevice.behaviors.fixedLabel) childInit.fixedLabel = { labelList: [{ label: 'name', value: o.childLockName || 'Child Lock' }] };
+    child = await node.add(ChildDevice, childInit);
+  }
+
   await node.start();
 
   const codes = node.state.commissioning.pairingCodes;
@@ -151,6 +173,9 @@ async function startMatterLock(p, o) {
       const ps = { batChargeLevel: batLevel(bat), batChargeState: chargeState(bat) };
       if (bat.percent != null) ps.batPercentRemaining = Math.round(bat.percent * 2);
       await endpoint.set({ powerSource: ps });
+    },
+    async setChildLock(on) {
+      if (child) await child.set({ doorLock: { lockState: on ? LockState.Locked : LockState.Unlocked } });
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

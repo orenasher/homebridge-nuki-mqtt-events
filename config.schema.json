@@ -176,6 +176,12 @@
             "default": "switch",
             "oneOf": [
               {
+                "title": "Inside the Matter lock (Front Door) — as a second lock section",
+                "enum": [
+                  "matter"
+                ]
+              },
+              {
                 "title": "A separate switch",
                 "enum": [
                   "switch"
@@ -194,8 +200,9 @@
             "type": "string",
             "default": "Child Lock",
             "condition": {
-              "functionBody": "return model.childLock && (model.childLock.style || 'switch') === 'switch';"
-            }
+              "functionBody": "return true;"
+            },
+            "description": "Name of the child-lock switch / section."
           },
           "lockName": {
             "title": "Lock name",

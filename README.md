@@ -67,8 +67,8 @@ Every code added in Home is created on the Nuki Keypad through Nuki Web (with th
 or changed with it, and removed when it is removed in Home. A keypad unlock with such a code shows up in
 Home as that person.
 
-- Codes must be **6 digits from 1 to 9** (the keypad has no 0) and must not start with **12** — Home shows
-  an error for any other code.
+- Keypad codes must be **6 digits from 1 to 9** (the keypad has no 0) and must not start with **12** — Home shows
+  any other code is kept in Home only (with a note in the log).
 - Uses the Nuki Web token of the Child lock section; the token needs the scope **View and manage authorizations**.
 - `doorLock.accessCodes: false` turns it off (re-pair the lock in Home after changing it).
 

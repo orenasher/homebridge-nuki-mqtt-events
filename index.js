@@ -384,6 +384,14 @@ class NukiMqttEvents {
           delete this.codeMap[i];
         } else if (!e.synced) {
           const name = e.name || `Home ${i}`;
+          const why = this.checkCode(String(e.code || ''));
+          if (why) {
+            // Home keeps the code (it works for Home itself); it just cannot go on the Nuki Keypad
+            if (e.id) { await web.removeKeypadCode(e.id); e.id = null; e.authId = null; }
+            if (e.skipped !== e.code) this.log.warn(`Access codes: "${name}" stays in Home only — ${why}`);
+            e.skipped = e.code; e.synced = true; this.saveCodes();
+            continue;
+          }
           if (e.id) {
             await web.updateKeypadCode(e.id, { name, code: e.code });
             this.log.info(`Access codes: updated "${name}" on the Nuki Keypad`);
@@ -528,7 +536,6 @@ class NukiMqttEvents {
         isDoorOpen: () => this.doorOpen,
         onChildLock: (on) => this.applyChild(on),
         onCodes: (list, fresh) => this.onCodes(list, fresh),
-        checkCode: (code) => this.checkCode(code),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,

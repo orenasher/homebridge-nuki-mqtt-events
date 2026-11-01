@@ -60,7 +60,9 @@ async function startMatterLock(p, o) {
     id: 'nuki-door-lock',
     network: { port: o.port },
     commissioning: { passcode: o.passcode, discriminator: o.discriminator },
-    productDescription: { name: o.name, deviceType: DoorLockDevice.deviceType },
+    // With the child lock, the node is a bridge holding ONE bridged lock that has the child lock as a part
+    // (that is how a Matter bridge such as the Aqara hub presents the U200: one accessory, child-lock section).
+    productDescription: { name: o.name, deviceType: o.childLock ? require('@matter/main/endpoints/aggregator').AggregatorEndpoint.deviceType : DoorLockDevice.deviceType },
     basicInformation: {
       vendorName: 'Oren Asher',
       vendorId: VendorId(0xfff1),
@@ -114,7 +116,27 @@ async function startMatterLock(p, o) {
       endpointList: [],
     },
   };
-  const endpoint = await node.add(DoorLockDevice.with(...behaviors), initial);
+  let endpoint;
+  if (o.childLock) {
+    const { Endpoint } = main;
+    const { AggregatorEndpoint } = require('@matter/main/endpoints/aggregator');
+    const { BridgedDeviceBasicInformationServer } = require('@matter/main/behaviors/bridged-device-basic-information');
+    const aggregator = await node.add(new Endpoint(AggregatorEndpoint, { id: 'aggregator' }));
+    endpoint = await aggregator.add(new Endpoint(DoorLockDevice.with(...behaviors, BridgedDeviceBasicInformationServer), {
+      ...initial,
+      bridgedDeviceBasicInformation: {
+        nodeLabel: o.name.slice(0, 32),
+        productName: 'Nuki Door Lock',
+        productLabel: 'Nuki Door Lock',
+        vendorName: 'Nuki',
+        serialNumber: o.serial,
+        uniqueId: `nuki-lock-${o.serial}`,
+        reachable: true,
+      },
+    }));
+  } else {
+    endpoint = await node.add(DoorLockDevice.with(...behaviors), initial);
+  }
 
   // Log what Home writes to the lock, so it is visible how "Lock After Closing" is configured.
   const ev = endpoint.events.doorLock;
@@ -125,9 +147,6 @@ async function startMatterLock(p, o) {
       ev[k].on((v) => {
         if (endpoint.__fromPlugin) return;
         p.log.info(`Matter lock: Home set ${k.replace('$Changed', '')} = ${JSON.stringify(v)}`);
-        if (k === 'enableOneTouchLocking$Changed' && p.onChildLock) {
-          Promise.resolve(p.onChildLock(!!v)).catch((e) => p.log.warn(`Matter lock: child lock: ${e.message}`));
-        }
       });
     }
   }
@@ -141,7 +160,7 @@ async function startMatterLock(p, o) {
   // Child lock as a second lock on the same Matter accessory (Home shows a secondary lock as its own
   // section with Locked / Unlocked inside the accessory page). Locked = the button on the Nuki is disabled.
   let child = null;
-  if (o.childLock && o.childLockSecondEndpoint) {
+  if (o.childLock) {
     class ChildLockServer extends DoorLockServer {
       async handleLockOperation(op) {
         await p.onChildLock(op.actuation === 'lock');
@@ -153,7 +172,7 @@ async function startMatterLock(p, o) {
       descriptor: { tagList: [tag(2, o.childLockName || 'Child Lock')] },
       doorLock: { lockState: o.childOn ? LockState.Locked : LockState.Unlocked, lockType: 0, actuatorEnabled: true, operatingMode: 0 },
     };
-    child = await node.add(ChildDevice, childInit);
+    child = await endpoint.add(new (main.Endpoint)(ChildDevice, childInit)); // a part of the bridged lock
   }
 
   await node.start();
@@ -204,10 +223,6 @@ async function startMatterLock(p, o) {
     },
     async setChildLock(on) {
       if (child) await child.set({ doorLock: { lockState: on ? LockState.Locked : LockState.Unlocked } });
-      else if (o.childLock) {
-        endpoint.__fromPlugin = true;
-        try { await endpoint.set({ doorLock: { enableOneTouchLocking: !!on } }); } finally { endpoint.__fromPlugin = false; }
-      }
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

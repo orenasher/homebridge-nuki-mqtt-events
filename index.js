@@ -175,15 +175,42 @@ class NukiMqttEvents {
     return id;
   }
 
-  async applyChild(on) {
+  // Home's switch is answered right away; one background worker sends only the latest wanted value to
+  // Nuki Web. Quick toggles are merged, and "423 Locked" (the lock is still applying the previous change)
+  // is retried with a growing delay instead of failing.
+  applyChild(on) {
     this.log.info(`Child lock ${on ? 'ON — disabling' : 'OFF — enabling'} the button on the Smart Lock`);
-    try {
-      await this.nukiWeb.setButtonEnabled(!on);
-      this.childPendingUntil = Date.now() + 20 * 60000; // the lock reports the new value only after it syncs
-      this.setChild(on);
-    } catch (e) {
-      this.log.error(`Child lock: ${e.message}`);
-      throw new this.api.hap.HapStatusError(-70402);
+    this.childWant = on;
+    this.childPendingUntil = Date.now() + 20 * 60000; // the lock reports the new value only after it syncs
+    this.setChild(on);
+    if (!this.childWorker) this.childWorker = this.childSync().finally(() => { this.childWorker = null; });
+    return Promise.resolve();
+  }
+
+  async childSync() {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    await sleep(this.childDebounceMs ?? 1500); // merge quick on/off taps
+    let attempt = 0, delay = this.childRetryMs ?? 3000;
+    for (;;) {
+      const want = this.childWant;
+      if (want === this.childSent) return; // Nuki already has this value
+      try {
+        await this.nukiWeb.setButtonEnabled(!want);
+        this.childSent = want;
+        if (attempt) this.log.info(`Child lock ${want ? 'ON' : 'OFF'} sent to Nuki Web`);
+        attempt = 0; delay = this.childRetryMs ?? 3000;
+      } catch (e) {
+        const busy = / 423:/.test(e.message);
+        if (++attempt > (busy ? 8 : 3)) {
+          this.log.error(`Child lock: gave up — ${e.message}`);
+          this.childPendingUntil = 0;
+          if (this.childSent !== undefined) this.setChild(this.childSent);
+          return;
+        }
+        this.log.warn(`Child lock: ${busy ? 'the Smart Lock is still applying the previous change' : e.message} — retrying in ${Math.round(delay / 1000)} s`);
+        await sleep(delay);
+        delay = Math.min(delay * 2, 60000);
+      }
     }
   }
 
@@ -291,9 +318,10 @@ class NukiMqttEvents {
         if (!this.nukiWeb.nukiIdHex && this.nukiId) this.nukiWeb.nukiIdHex = this.nukiId.toLowerCase();
         const lock = await this.nukiWeb.get();
         const on = lock.config && lock.config.buttonEnabled === false;
-        if (on === this.childOn) { this.childPendingUntil = 0; return; }
+        if (this.childWorker) return; // a change is being sent right now
+        if (on === this.childOn) { this.childPendingUntil = 0; this.childSent = on; return; }
         if (Date.now() < (this.childPendingUntil || 0)) return; // our change is still on its way to the lock
-        { this.log.info(`Child lock is ${on ? 'ON' : 'OFF'} (from Nuki Web)`); this.setChild(on); }
+        { this.log.info(`Child lock is ${on ? 'ON' : 'OFF'} (from Nuki Web)`); this.childSent = on; this.setChild(on); }
       } catch (e) {
         this.log.warn(`Child lock: ${e.message}`);
       }

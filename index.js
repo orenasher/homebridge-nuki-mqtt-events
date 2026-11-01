@@ -31,6 +31,7 @@ class NukiMqttEvents {
     this.nukiState = null;
     this.stateWaiters = new Set();
     this.lockCfg = this.config.doorLock && this.config.doorLock.enabled ? this.config.doorLock : null;
+    if (this.config.childLock && this.config.childLock.style === 'matter') this.config.childLock.style = 'lock'; // removed experiment
     this.keypadCfg = this.config.keypad && this.config.keypad.enabled ? this.config.keypad : null;
     this.keypadLow = false;
     this.childCfg = this.config.childLock && this.config.childLock.enabled && this.config.childLock.token ? this.config.childLock : null;
@@ -93,7 +94,7 @@ class NukiMqttEvents {
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
-    if (this.childCfg && this.childCfg.style !== 'matter') keep.add(this.setupChildLock());
+    if (this.childCfg) keep.add(this.setupChildLock());
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
@@ -203,11 +204,25 @@ class NukiMqttEvents {
         this.hapTarget = Number(v);
         this.actuate(action, 'Home (HomeKit lock)').catch((e) => this.log.warn(`HomeKit lock: ${e.message}`));
       });
-    const plc = lock.testCharacteristic(Characteristic.LockPhysicalControls)
-      ? lock.getCharacteristic(Characteristic.LockPhysicalControls)
-      : lock.addCharacteristic(Characteristic.LockPhysicalControls);
-    plc.onGet(() => (this.childOn ? 1 : 0))
+    // the child lock lives on the Lock Management service below (Home ignored it here)
+    if (lock.testCharacteristic(Characteristic.LockPhysicalControls)) lock.removeCharacteristic(lock.getCharacteristic(Characteristic.LockPhysicalControls));
+    // Lock Management service (part of Apple's HomeKit lock profile): auto-lock timeout + child lock
+    const mgmt = acc.getService(Service.LockManagement) || acc.addService(Service.LockManagement, `${name} Settings`);
+    mgmt.getCharacteristic(Characteristic.Version).onGet(() => '1.0');
+    mgmt.getCharacteristic(Characteristic.LockControlPoint).onSet(() => {});
+    const addChar = (svc, C) => (svc.testCharacteristic(C) ? svc.getCharacteristic(C) : svc.addCharacteristic(C));
+    this.hapAutoLock = Number(acc.context.autoLock ?? (this.lockCfg && this.lockCfg.lockAfterCloseSeconds) ?? 0) || 0;
+    addChar(mgmt, Characteristic.AutoSecurityTimeout)
+      .onGet(() => this.hapAutoLock)
+      .onSet((v) => {
+        this.hapAutoLock = Number(v) || 0;
+        acc.context.autoLock = this.hapAutoLock;
+        this.log.info(`HomeKit lock: Home set auto-lock to ${this.hapAutoLock ? `${this.hapAutoLock} s` : 'off'}`);
+      });
+    addChar(mgmt, Characteristic.LockPhysicalControls)
+      .onGet(() => (this.childOn ? 1 : 0))
       .onSet((v) => this.applyChild(Number(v) === 1));
+    this.hapMgmt = mgmt;
     const bat = acc.getService(Service.Battery) || acc.addService(Service.Battery, `${name} Battery`);
     bat.getCharacteristic(Characteristic.BatteryLevel).onGet(() => this.battery.percent ?? 100);
     bat.getCharacteristic(Characteristic.StatusLowBattery).onGet(() => (this.battery.critical || (this.battery.percent ?? 100) <= 20 ? 1 : 0));
@@ -246,8 +261,7 @@ class NukiMqttEvents {
     this.childOn = on;
     if (this.childAcc) this.childAcc.context.childOn = on;
     if (this.childSvc) this.childSvc.updateCharacteristic(this.api.hap.Characteristic.On, on);
-    if (this.hapLock) this.hapLock.updateCharacteristic(this.api.hap.Characteristic.LockPhysicalControls, on ? 1 : 0);
-    if (this.matter && this.matter.setChildLock) this.matter.setChildLock(on).catch(() => {});
+    if (this.hapMgmt) this.hapMgmt.updateCharacteristic(this.api.hap.Characteristic.LockPhysicalControls, on ? 1 : 0);
   }
 
   startChildLock() {
@@ -317,6 +331,7 @@ class NukiMqttEvents {
   relockDelay() {
     const fromHome = this.matter ? this.matter.autoRelockTime() : 0;
     if (fromHome > 0) return fromHome;
+    if (this.hapAutoLock > 0) return this.hapAutoLock; // set in Home on the HomeKit lock
     const own = this.lockCfg && this.lockCfg.lockAfterCloseSeconds;
     if (own !== undefined && own !== null && own !== '' && Number(own) >= 0) return Number(own);
     return null;
@@ -325,7 +340,7 @@ class NukiMqttEvents {
   armRelock(why) {
     clearTimeout(this.relockTimer);
     this.relockTimer = null;
-    if (!this.lockCfg || !UNLOCKED_STATES.includes(this.nukiState)) return;
+    if (!(this.lockCfg || this.hapLock) || !UNLOCKED_STATES.includes(this.nukiState)) return;
     if (this.doorOpen === true) { this.log.info(`Unlocked (${why}) — will auto-lock after the door closes`); return; }
     const delay = this.relockDelay();
     if (delay === null) return;
@@ -348,7 +363,6 @@ class NukiMqttEvents {
         log: this.log,
         actuate: (a, why) => this.actuate(a, why),
         isDoorOpen: () => this.doorOpen,
-        onChildLock: (on) => this.applyChild(on).catch((e) => { this.matter && this.matter.setChildLock(this.childOn); throw e; }),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,
@@ -359,8 +373,6 @@ class NukiMqttEvents {
         lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
         doorOpen: this.doorOpen,
         battery: this.battery,
-        childLock: !!(this.childCfg && this.childCfg.style === 'matter'),
-        childOn: this.childOn,
         matterLogLevel: c.matterLogLevel,
       });
       if (this.nukiState !== null) this.pushLockState();

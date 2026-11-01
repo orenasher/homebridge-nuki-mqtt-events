@@ -35,10 +35,6 @@ async function startMatterLock(p, o) {
   const { DoorLockDevice } = require('@matter/main/devices/door-lock');
   const { DoorLockServer } = require('@matter/main/behaviors/door-lock');
   const { PowerSourceServer } = require('@matter/main/behaviors/power-source');
-  // Experimental child lock: Matter's DoorLock has no child-lock attribute, so the lock also carries the
-  // keypad-lockout cluster (KeypadLockout 0 = off, 1 = locked) that controllers use for "Child Lock".
-  const { ThermostatUserInterfaceConfigurationServer: UiServer } = o.childLock
-    ? require('@matter/main/behaviors/thermostat-user-interface-configuration') : {};
 
   const vars = Environment.default.vars;
   vars.set('path.root', o.storagePath);
@@ -76,7 +72,6 @@ async function startMatterLock(p, o) {
 
   const b = o.battery || {};
   const behaviors = [NukiDoorLockServer, PowerSourceServer.with('Battery', 'Rechargeable')];
-  if (UiServer) behaviors.push(UiServer);
   const initial = {
     id: 'lock',
     doorLock: {
@@ -100,15 +95,7 @@ async function startMatterLock(p, o) {
       endpointList: [],
     },
   };
-  if (UiServer) initial.thermostatUserInterfaceConfiguration = { temperatureDisplayMode: 0, keypadLockout: o.childOn ? 1 : 0 };
   const endpoint = await node.add(DoorLockDevice.with(...behaviors), initial);
-  if (UiServer) {
-    endpoint.events.thermostatUserInterfaceConfiguration.keypadLockout$Changed.on((v) => {
-      if (endpoint.__fromPlugin) return;
-      p.log.info(`Matter lock: Home set child lock ${v ? 'ON' : 'OFF'}`);
-      Promise.resolve(p.onChildLock && p.onChildLock(Number(v) > 0)).catch((e) => p.log.warn(`Matter lock: child lock: ${e.message}`));
-    });
-  }
 
   // Log what Home writes to the lock, so it is visible how "Lock After Closing" is configured.
   const ev = endpoint.events.doorLock;
@@ -164,11 +151,6 @@ async function startMatterLock(p, o) {
       const ps = { batChargeLevel: batLevel(bat), batChargeState: chargeState(bat) };
       if (bat.percent != null) ps.batPercentRemaining = Math.round(bat.percent * 2);
       await endpoint.set({ powerSource: ps });
-    },
-    async setChildLock(on) {
-      if (!UiServer) return;
-      endpoint.__fromPlugin = true;
-      try { await endpoint.set({ thermostatUserInterfaceConfiguration: { keypadLockout: on ? 1 : 0 } }); } finally { endpoint.__fromPlugin = false; }
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

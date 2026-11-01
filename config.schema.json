@@ -176,19 +176,13 @@
             "default": "switch",
             "oneOf": [
               {
-                "title": "Inside the Matter lock (experimental — Child Lock row on Front Door)",
-                "enum": [
-                  "matter"
-                ]
-              },
-              {
                 "title": "A separate switch",
                 "enum": [
                   "switch"
                 ]
               },
               {
-                "title": "Inside a HomeKit lock (Child Lock row on the lock, with battery and jammed state)",
+                "title": "Inside a HomeKit lock (experimental: Child Lock and Auto-Lock on the lock, with battery and jammed state)",
                 "enum": [
                   "lock"
                 ]

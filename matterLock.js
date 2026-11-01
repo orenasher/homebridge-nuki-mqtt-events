@@ -54,10 +54,10 @@ async function startMatterLock(p, o) {
       return { index: c.credentialIndex, userIndex, name: names.get(userIndex) || '' };
     });
   };
-  const changed = (self, codes) => {
+  const changed = (self, codes, userIndex) => {
     if (!o.accessCodes || !p.onCodes) return;
     if (codes) {
-      try { p.onCodes(snapshot(self.state), codes); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
+      try { p.onCodes(snapshot(self.state), codes, userIndex); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
       return;
     }
     // removals: read the stored state once the command has been committed
@@ -88,7 +88,7 @@ async function startMatterLock(p, o) {
         }
       }
       const res = super.setCredential(request);
-      if (isPin && res && res.status === 0) changed(this, { [request.credential.credentialIndex]: code });
+      if (isPin && res && res.status === 0) changed(this, { [request.credential.credentialIndex]: code }, res.userIndex ?? request.userIndex);
       return res;
     }
 
@@ -99,12 +99,19 @@ async function startMatterLock(p, o) {
 
     clearUser(request) {
       if (o.accessCodes) p.log.info(`Matter lock: Home clearUser user=${request.userIndex}`);
-      return Promise.resolve(super.clearUser(request)).then((r) => { changed(this); return r; });
+      const r = super.clearUser(request);
+      if (o.accessCodes && p.onCodesRemoved) p.onCodesRemoved(request.userIndex === 0xfffe ? { all: true } : { userIndex: request.userIndex });
+      return r;
     }
 
     clearCredential(request) {
       if (o.accessCodes) p.log.info(`Matter lock: Home clearCredential ${request.credential ? `type=${request.credential.credentialType} index=${request.credential.credentialIndex}` : 'all'}`);
-      return Promise.resolve(super.clearCredential(request)).then((r) => { changed(this); return r; });
+      const r = super.clearCredential(request);
+      const c = request.credential;
+      if (o.accessCodes && p.onCodesRemoved && (!c || c.credentialType === PIN)) {
+        p.onCodesRemoved(!c || c.credentialIndex === 0xfffe ? { all: true } : { index: c.credentialIndex });
+      }
+      return r;
     }
   }
 

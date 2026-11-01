@@ -49,7 +49,7 @@ class NukiMqttEvents {
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
-      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearInterval(this.codeCheck);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -345,21 +345,34 @@ class NukiMqttEvents {
   }
 
   // Called by the Matter lock after Home changed users/codes: list = current PIN codes, fresh = {index: code}
-  onCodes(list, fresh) {
+  onCodes(list, fresh, userIndex) {
     if (!this.codeMap) this.loadCodes();
     for (const [i, code] of Object.entries(fresh)) {
       const cur = this.codeMap[i] || {};
-      this.codeMap[i] = { ...cur, code, synced: cur.code === code ? cur.synced : false };
+      this.codeMap[i] = { ...cur, code, removed: false, synced: cur.code === code && !cur.removed ? cur.synced : false };
+      if (userIndex != null) this.codeMap[i].userIndex = userIndex;
     }
-    const present = new Set(list.map((c) => String(c.index)));
+    // names (and owners) of the codes; removals are reported by onCodesRemoved
     for (const c of list) {
       const e = this.codeMap[c.index];
       if (!e) continue;
-      e.userIndex = c.userIndex;
+      if (c.userIndex != null) e.userIndex = c.userIndex;
       const name = c.name || `Home ${c.index}`;
       if (e.name !== name) { e.name = name; e.synced = false; }
     }
-    for (const i of Object.keys(this.codeMap)) if (!present.has(i)) this.codeMap[i].removed = true;
+    this.saveCodes();
+    this.syncCodesSoon();
+  }
+
+  // Home removed a code (by its index), every code of a user, or all codes
+  onCodesRemoved(what) {
+    if (!this.codeMap) this.loadCodes();
+    let n = 0;
+    for (const [i, e] of Object.entries(this.codeMap)) {
+      if (what.all || String(what.index) === i || (what.userIndex != null && e.userIndex === what.userIndex)) { e.removed = true; n++; }
+    }
+    this.log.info(`Access codes: Home removed ${what.all ? 'all codes' : what.index != null ? `code ${what.index}` : `the codes of user ${what.userIndex}`}${n ? '' : ' (not on the keypad)'}`);
+    if (!n) return;
     this.saveCodes();
     this.syncCodesSoon();
   }
@@ -520,19 +533,6 @@ class NukiMqttEvents {
     try {
       this.matter = await this.openMatterLock(opts);
       if (this.nukiState !== null) this.pushLockState();
-      // Safety net: compare Home's codes with what was sent to the keypad every minute
-      if (this.lockCfg.accessCodes !== false && this.matter.codes) {
-        const check = () => {
-          try {
-            const list = this.matter.codes();
-            if (!list || !this.codeMap) return;
-            const known = Object.keys(this.codeMap).filter((i) => !this.codeMap[i].removed);
-            const now = new Set(list.map((c) => String(c.index)));
-            if (known.some((i) => !now.has(i))) { this.log.info('Access codes: a code was removed in Home'); this.onCodes(list, {}); }
-          } catch (e) { this.log.warn(`Access codes: ${e.message}`); }
-        };
-        this.codeCheck = setInterval(check, this.codeCheckMs ?? 60000);
-      }
     } catch (e) {
       this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
       if (opts.childLock || this.lockCfg.accessCodes !== false) {
@@ -552,7 +552,8 @@ class NukiMqttEvents {
         actuate: (a, why) => this.actuate(a, why),
         isDoorOpen: () => this.doorOpen,
         onChildLock: (on) => this.applyChild(on),
-        onCodes: (list, fresh) => this.onCodes(list, fresh),
+        onCodes: (list, fresh, userIndex) => this.onCodes(list, fresh, userIndex),
+        onCodesRemoved: (what) => this.onCodesRemoved(what),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,

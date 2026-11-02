@@ -39,9 +39,13 @@ class UiServer extends HomebridgePluginUiServer {
     const out = { name: lock && lock.name, smartlockId: web.id, canConfig: true, canAuths: true, people: [] };
     try {
       const auths = await web.listAuths();
+      // People on the keypad (code / fingerprint) — not the codes this plugin made from Home, not app users or Nuki Web
+      const ours = /^(Apple Home|Home)( \d+)?$/;
       out.people = auths
-        .filter((a) => a.type === 13 || a.type === 0)
-        .map((a) => ({ authId: a.authId, name: a.name, type: a.type, fingerprints: a.fingerprints ? Object.keys(a.fingerprints).length : 0 }));
+        .filter((a) => a.type === 13 && !ours.test(String(a.name || '').trim()))
+        .map((a) => ({ authId: a.authId, name: a.name, type: a.type, fingerprints: a.fingerprints ? Object.keys(a.fingerprints).length : 0 }))
+        .sort((x, y) => (y.fingerprints > 0) - (x.fingerprints > 0));
+      out.leftovers = auths.filter((a) => a.type === 13 && /^Home \d+$/.test(String(a.name || '').trim())).length;
     } catch (e) {
       if (/ 401| 403/.test(e.message)) out.canAuths = false; else throw new RequestError(e.message, { code: 'failed' });
     }

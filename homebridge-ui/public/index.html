@@ -40,6 +40,10 @@
   .nk .nk-save { position: sticky; bottom: 0; border: 1px solid var(--nk-accent); border-radius: 10px; padding: 0.5rem 0.8rem; background: rgba(245, 165, 36, 0.12); display: none; margin-bottom: 1rem; }
   .nk details > summary { cursor: pointer; font-weight: 700; }
   .nk select.form-control { width: auto; display: inline-block; }
+  .nk .form-control { background-color: rgba(128, 128, 128, 0.12); color: inherit; border: 1px solid var(--nk-line); }
+  .nk .form-control:focus { background-color: rgba(128, 128, 128, 0.18); color: inherit; border-color: var(--nk-accent); box-shadow: 0 0 0 1px var(--nk-accent); }
+  .nk select.form-control option { color: #111; }
+  .nk .form-control::placeholder { color: inherit; opacity: 0.45; }
   [dir="rtl"] .nk { text-align: right; }
 </style>
 
@@ -205,6 +209,7 @@
         'web.bad': '❌ הטוקן לא עובד או חסרות הרשאות.',
         'web.failed': '❌ לא הצלחתי לבדוק: {msg}',
         'web.none': 'הדביקו טוקן קודם.',
+        'web.leftovers': '⚠️ יש בקודן {n} קודים ישנים בשם "Home 1" וכו׳ מגרסאות קודמות — מחקו אותם באפליקציית נוקי (Keypad).',
         'names.title': 'שמות ב‑Apple Home',
         'names.lock': 'שם המנעול',
         'names.lockHelp': 'שינוי שם אחרי הצימוד: שנו גם באפליקציית הבית.',
@@ -290,6 +295,7 @@
         'web.bad': '❌ The token does not work or lacks rights.',
         'web.failed': '❌ Could not check: {msg}',
         'web.none': 'Paste a token first.',
+        'web.leftovers': '⚠️ The keypad has {n} old codes named "Home 1" etc. from earlier versions — delete them in the Nuki app (Keypad).',
         'names.title': 'Names in Apple Home',
         'names.lock': 'Lock name',
         'names.lockHelp': 'Renaming after pairing: rename it in the Home app too.',
@@ -611,6 +617,7 @@
         const r = await homebridge.request('/nuki-web', { token, nukiId: (status && status.nukiId) || cfg.deviceId || null });
         res.innerHTML = esc(t('web.ok', { name: r.name || '' })) + '<br>' + esc(r.canAuths ? t('web.okAuths') : t('web.noAuths'));
         people = r.people || [];
+        if (r.leftovers) res.innerHTML += '<br>' + esc(t('web.leftovers', { n: r.leftovers }));
         renderPeople();
       } catch (e) {
         const code = e && e.error && e.error.code;

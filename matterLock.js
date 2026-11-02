@@ -72,6 +72,8 @@ async function startMatterLock(p, o) {
       try { if (endpoint) p.onCodes(snapshot(endpoint.state.doorLock), {}); } catch (e) { p.log.warn(`Matter lock: access codes: ${e.message}`); }
     }, 1000);
   };
+  const unboltFile = require('path').join(o.storagePath, 'home-uses-unbolt');
+  let unboltSeen = fs.existsSync(unboltFile);
   class NukiDoorLockServer extends DoorLockServer.with(...features) {
     // Called by matter.js for Home commands (source Remote) and for its own auto-relock (source Auto).
     async handleLockOperation(op) {
@@ -80,8 +82,14 @@ async function startMatterLock(p, o) {
         p.log.warn(`Matter lock: refused to lock${auto ? ' (auto-relock)' : ''} while the door is open`);
         throw new Error('Door is open');
       }
-      // With Unbolting, Matter "unlock" fully opens the door (unlatch) and "unbolt" only unlocks.
-      const action = op.actuation === 'lock' ? 'lock' : op.actuation === 'unbolt' ? 'unlock' : o.unlatch && !auto ? 'unlatch' : 'unlock';
+      // With Unbolting, Matter "unlock" fully opens the door (unlatch) and "unbolt" only unlocks. A Home that paired
+      // before the lock had this feature never sends "unbolt" and uses "unlock" for its normal Unlock — so "unlock"
+      // pulls the latch only once Home has shown that it knows the difference (it sent an "unbolt").
+      if (op.actuation === 'unbolt' && !unboltSeen) {
+        unboltSeen = true;
+        try { fs.writeFileSync(unboltFile, '1'); } catch (e) { /* ignore */ }
+      }
+      const action = op.actuation === 'lock' ? 'lock' : op.actuation === 'unbolt' ? 'unlock' : o.unlatch && unboltSeen && !auto ? 'unlatch' : 'unlock';
       if (o.accessCodes && op.actuation !== 'lock') p.log.info(`Matter lock: Home ${op.actuation} → Nuki ${action}`);
       await p.actuate(action, auto ? 'Matter auto-relock' : 'Home (Matter)');
     }

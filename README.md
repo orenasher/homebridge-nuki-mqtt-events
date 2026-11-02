@@ -125,6 +125,7 @@ So the alarm is disarmed only by fingerprint, never when the door is opened from
 | Child lock error 423 in the log | The lock was still applying the previous change; the plugin retries by itself. |
 | Code not on the keypad | Check the code rules (section 7) and the token right "View and manage authorizations". |
 | Update fails with `ETARGET` right after publishing | npm needs a few minutes; try again. |
+| No "Unlatch" button after updating from an older version | Home remembers what the lock offered when it was paired. Reset the pairing (section 5) and add the lock again. Until then, Unlock in Home only unlocks. |
 
 The log shows everything the plugin does (`Matter lock:`, `Access codes:`, `Child lock`, `ALERT:`).
 

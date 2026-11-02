@@ -69,9 +69,9 @@ class NukiWeb {
     return Array.isArray(list) ? list : [];
   }
 
-  async addKeypadCode(name, code) {
+  async addKeypadCode(name, code, limits = {}) {
     const id = await this.findId();
-    await request(this.token, 'PUT', `/smartlock/${id}/auth`, { name: name.slice(0, 20), type: 13, code: Number(code) });
+    await request(this.token, 'PUT', `/smartlock/${id}/auth`, { name: name.slice(0, 20), type: 13, code: Number(code), ...limits });
     // the create call returns no body and the entry shows up a little later: look for it by its code
     for (const wait of [1000, 2000, 4000, 8000]) {
       await new Promise((r) => setTimeout(r, this.lookupScale != null ? wait * this.lookupScale : wait));

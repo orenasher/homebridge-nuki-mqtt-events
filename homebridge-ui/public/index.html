@@ -1,0 +1,656 @@
+<style>
+  .nk { --nk-accent: #f5a524; --nk-ok: #2e9e5b; --nk-bad: #d9534f; --nk-line: rgba(128, 128, 128, 0.28); --nk-soft: rgba(128, 128, 128, 0.08); }
+  .nk .nk-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .nk .nk-title { font-size: 1.35rem; font-weight: 700; margin: 0; }
+  .nk .nk-title small { display: block; font-size: 0.8rem; font-weight: 400; opacity: 0.7; }
+  .nk .nk-lang { display: flex; gap: 0.25rem; }
+  .nk .nk-lang button { border: 1px solid var(--nk-line); background: transparent; color: inherit; border-radius: 999px; padding: 0.2rem 0.8rem; font-size: 0.85rem; }
+  .nk .nk-lang button[aria-pressed="true"] { background: var(--nk-accent); border-color: var(--nk-accent); color: #111; font-weight: 600; }
+  .nk .nk-card { border: 1px solid var(--nk-line); border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: 1rem; background: var(--nk-soft); }
+  .nk .nk-card h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
+  .nk .nk-step { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--nk-accent); color: #111; font-size: 0.85rem; font-weight: 700; flex: 0 0 auto; }
+  .nk .nk-hint { font-size: 0.85rem; opacity: 0.75; margin: 0.25rem 0 0.6rem; }
+  .nk .nk-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
+  .nk .nk-preset { text-align: start; border: 2px solid var(--nk-line); border-radius: 12px; padding: 0.75rem; background: transparent; color: inherit; cursor: pointer; }
+  .nk .nk-preset[aria-checked="true"] { border-color: var(--nk-accent); box-shadow: 0 0 0 1px var(--nk-accent); }
+  .nk .nk-preset b { display: block; font-size: 1rem; margin-bottom: 0.2rem; }
+  .nk .nk-preset span { font-size: 0.82rem; opacity: 0.75; }
+  .nk .nk-preset .nk-ico { font-size: 1.4rem; display: block; margin-bottom: 0.25rem; }
+  .nk .nk-field { margin-bottom: 0.8rem; }
+  .nk .nk-field > label { display: block; font-weight: 600; margin-bottom: 0.2rem; }
+  .nk .nk-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .nk .nk-row > .form-control { flex: 1 1 10rem; }
+  .nk .nk-switch { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.7rem; cursor: pointer; }
+  .nk .nk-switch input { margin-top: 0.25rem; width: 1.1rem; height: 1.1rem; accent-color: var(--nk-accent); flex: 0 0 auto; }
+  .nk .nk-switch b { display: block; }
+  .nk .nk-code { font-size: 1.6rem; font-weight: 700; letter-spacing: 0.08em; direction: ltr; unicode-bidi: isolate; }
+  .nk .nk-badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; font-weight: 600; }
+  .nk .nk-badge.ok { background: rgba(46, 158, 91, 0.18); color: var(--nk-ok); }
+  .nk .nk-badge.bad { background: rgba(217, 83, 79, 0.18); color: var(--nk-bad); }
+  .nk .nk-badge.wait { background: rgba(245, 165, 36, 0.18); color: var(--nk-accent); }
+  .nk .nk-status { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.6rem; }
+  .nk .nk-status > div { border: 1px solid var(--nk-line); border-radius: 10px; padding: 0.55rem 0.7rem; }
+  .nk .nk-status small { display: block; opacity: 0.7; font-size: 0.78rem; }
+  .nk ol.nk-steps { padding-inline-start: 1.3em; margin: 0.25rem 0 0.5rem; }
+  .nk ol.nk-steps li { margin-bottom: 0.3rem; }
+  .nk .nk-ltr { direction: ltr; unicode-bidi: isolate; font-family: ui-monospace, monospace; }
+  .nk .nk-list { list-style: none; padding: 0; margin: 0; }
+  .nk .nk-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; padding: 0.45rem 0; border-bottom: 1px solid var(--nk-line); }
+  .nk .nk-list li:last-child { border-bottom: 0; }
+  .nk .nk-save { position: sticky; bottom: 0; border: 1px solid var(--nk-accent); border-radius: 10px; padding: 0.5rem 0.8rem; background: rgba(245, 165, 36, 0.12); display: none; margin-bottom: 1rem; }
+  .nk details > summary { cursor: pointer; font-weight: 700; }
+  .nk select.form-control { width: auto; display: inline-block; }
+  [dir="rtl"] .nk { text-align: right; }
+</style>
+
+<div class="nk" id="nk">
+  <div class="nk-top">
+    <p class="nk-title"><span data-t="title"></span><small data-t="subtitle"></small></p>
+    <div class="nk-lang" role="group" aria-label="Language">
+      <button type="button" data-lang="he">עברית</button>
+      <button type="button" data-lang="en">English</button>
+    </div>
+  </div>
+
+  <div class="nk-save" id="nk-save" data-t="unsaved"></div>
+
+  <!-- status -->
+  <div class="nk-card">
+    <h3><span>📡</span><span data-t="status.title"></span></h3>
+    <div class="nk-status" id="nk-status"></div>
+    <div id="nk-pair" style="display: none; margin-top: 0.8rem">
+      <div data-t="status.pairHelp"></div>
+      <div class="nk-code" id="nk-pair-code"></div>
+    </div>
+  </div>
+
+  <!-- 1 setup -->
+  <div class="nk-card">
+    <h3><span class="nk-step">1</span><span data-t="setup.title"></span></h3>
+    <p class="nk-hint" data-t="setup.help"></p>
+    <div class="nk-presets" id="nk-presets" role="radiogroup"></div>
+  </div>
+
+  <!-- 2 connect the Nuki -->
+  <div class="nk-card">
+    <h3><span class="nk-step">2</span><span data-t="mqtt.title"></span></h3>
+    <ol class="nk-steps">
+      <li data-t="mqtt.s1"></li>
+      <li data-t="mqtt.s2"></li>
+      <li><span data-t="mqtt.s3"></span> <b class="nk-ltr" id="nk-ip"></b></li>
+      <li><span data-t="mqtt.s4"></span> <b class="nk-ltr" id="nk-port">1883</b></li>
+      <li data-t="mqtt.s5"></li>
+    </ol>
+  </div>
+
+  <!-- 3 Nuki Web -->
+  <div class="nk-card" id="nk-web-card">
+    <h3><span class="nk-step">3</span><span data-t="web.title"></span></h3>
+    <p class="nk-hint" data-t="web.help"></p>
+    <ol class="nk-steps">
+      <li data-t="web.s1"></li>
+      <li data-t="web.s2"></li>
+      <li data-t="web.s3"></li>
+    </ol>
+    <div class="nk-field">
+      <label for="nk-token" data-t="web.token"></label>
+      <div class="nk-row">
+        <input type="password" class="form-control" id="nk-token" autocomplete="off" dir="ltr" />
+        <button type="button" class="btn btn-primary m-0" id="nk-test" data-t="web.test"></button>
+      </div>
+      <div id="nk-web-result" class="nk-hint"></div>
+    </div>
+  </div>
+
+  <!-- 4 names -->
+  <div class="nk-card" id="nk-names-card">
+    <h3><span class="nk-step">4</span><span data-t="names.title"></span></h3>
+    <div id="nk-names"></div>
+  </div>
+
+  <!-- door sensor guide -->
+  <div class="nk-card" data-need="lock">
+    <h3><span>🚪</span><span data-t="door.title"></span></h3>
+    <p class="nk-hint" data-t="door.help"></p>
+    <ol class="nk-steps">
+      <li data-t="door.s1"></li>
+      <li data-t="door.s2"></li>
+      <li data-t="door.s3"></li>
+    </ol>
+  </div>
+
+  <!-- lock features -->
+  <div class="nk-card" data-need="lock">
+    <h3><span>🔐</span><span data-t="features.title"></span></h3>
+    <div id="nk-features"></div>
+  </div>
+
+  <!-- alerts -->
+  <div class="nk-card" data-need="lock">
+    <h3><span>🚨</span><span data-t="alerts.title"></span></h3>
+    <div id="nk-alerts"></div>
+  </div>
+
+  <!-- people -->
+  <div class="nk-card" data-need="lock">
+    <h3><span>👤</span><span data-t="people.title"></span></h3>
+    <p class="nk-hint" data-t="people.help"></p>
+    <ul class="nk-list" id="nk-people"></ul>
+  </div>
+
+  <!-- switches -->
+  <div class="nk-card" data-need="switches">
+    <h3><span>👆</span><span data-t="switches.title"></span></h3>
+    <p class="nk-hint" data-t="switches.help"></p>
+    <ul class="nk-list" id="nk-switches"></ul>
+    <button type="button" class="btn btn-outline-primary btn-sm m-0 mt-2" id="nk-add-switch" data-t="switches.add"></button>
+  </div>
+
+  <!-- custom -->
+  <div class="nk-card" id="nk-custom" style="display: none">
+    <h3><span>⚙️</span><span data-t="custom.title"></span></h3>
+    <div id="nk-custom-body"></div>
+  </div>
+
+  <div class="nk-card">
+    <details id="nk-adv">
+      <summary data-t="adv.title"></summary>
+      <p class="nk-hint" data-t="adv.help"></p>
+    </details>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const STR = {
+      he: {
+        title: 'נוקי ל‑Apple Home',
+        subtitle: 'homebridge-nuki-mqtt-events',
+        unsaved: '💾 יש שינויים — לחצו על "שמירה" (Save) למטה, ואז הפעילו מחדש את Homebridge.',
+        'status.title': 'מצב',
+        'status.nuki': 'חיבור לנוקי',
+        'status.nukiOk': 'מחובר',
+        'status.nukiNo': 'עוד לא התקבלה הודעה',
+        'status.lock': 'המנעול ב‑Apple Home',
+        'status.paired': 'מצומד',
+        'status.notPaired': 'מחכה לצימוד',
+        'status.off': 'כבוי',
+        'status.battery': 'סוללה',
+        'status.codes': 'קודים בקודן',
+        'status.unknown': 'Homebridge עוד לא רץ עם הגרסה הזו',
+        'status.pairHelp': 'באפליקציית הבית: הוספת אביזר ← אפשרויות נוספות ← הקלידו את הקוד:',
+        'setup.title': 'בחרו מה אתם רוצים',
+        'setup.help': 'בקליק אחד — כל התכונות של התבנית נדלקות עם הגדרות טובות.',
+        'p.full': 'הכול', 'p.full.d': 'מנעול ב‑Home, נעילה אחרי סגירה, נעילת ילדים, קודים, קודן, התראות וטביעת אצבע',
+        'p.lock': 'רק מנעול', 'p.lock.d': 'מנעול ב‑Home עם נעילה אחרי סגירה, נעילת ילדים, קודים והתראות',
+        'p.fingerprint': 'רק טביעת אצבע', 'p.fingerprint.d': 'מתג שנדלק לרגע בפתיחה בטביעת אצבע (למשל לנטרול אזעקה)',
+        'p.custom': 'מותאם אישית', 'p.custom.d': 'בוחרים כל תכונה לבד',
+        'mqtt.title': 'חיבור הנוקי (פעם אחת, באפליקציית נוקי)',
+        'mqtt.s1': 'פותחים את אפליקציית Nuki ובוחרים את המנעול.',
+        'mqtt.s2': 'הגדרות ← Features & Configuration ← MQTT ← מפעילים.',
+        'mqtt.s3': 'Host (כתובת):',
+        'mqtt.s4': 'Port:',
+        'mqtt.s5': 'שם משתמש וסיסמה משאירים ריקים, ומפעילים את "Allow lock actions". שומרים.',
+        'web.title': 'טוקן Nuki Web (לנעילת ילדים ולקודים)',
+        'web.help': 'נדרש לנעילת ילדים ולסנכרון קודים מ‑Home לקודן. אפשר לדלג אם לא צריך אותם.',
+        'web.s1': 'נכנסים ל‑web.nuki.io ← בתפריט: API ← Generate API token.',
+        'web.s2': 'מסמנים רק: View devices, View and edit devices, Manage device configuration, View and manage authorizations.',
+        'web.s3': 'מעתיקים את הטוקן לכאן ולוחצים "בדיקה". (בפעם הראשונה צריך להזין ב‑web.nuki.io את קוד ה‑PIN של המנעול.)',
+        'web.token': 'טוקן',
+        'web.test': 'בדיקה',
+        'web.testing': 'בודק…',
+        'web.ok': '✅ מחובר למנעול "{name}".',
+        'web.okAuths': '✅ יש הרשאה לקודים.',
+        'web.noAuths': '⚠️ חסרה ההרשאה "View and manage authorizations" — הקודים לא יגיעו לקודן.',
+        'web.bad': '❌ הטוקן לא עובד או חסרות הרשאות.',
+        'web.failed': '❌ לא הצלחתי לבדוק: {msg}',
+        'web.none': 'הדביקו טוקן קודם.',
+        'names.title': 'שמות ב‑Apple Home',
+        'names.lock': 'שם המנעול',
+        'names.lockHelp': 'שינוי שם אחרי הצימוד: שנו גם באפליקציית הבית.',
+        'names.door': 'שם מתג חיישן הדלת',
+        'names.keypad': 'שם הקודן',
+        'names.child': 'שם נעילת הילדים',
+        'door.title': 'חיבור חיישן דלת (Aqara, Eve…)',
+        'door.help': 'כדי שהמנעול יידע אם הדלת פתוחה, הפלאגין יוצר מתג "{door}". מחברים אליו את חיישן הדלת בשתי אוטומציות באפליקציית הבית:',
+        'door.s1': 'אוטומציה ← כשחיישן הדלת נפתח ← להדליק את "{door}".',
+        'door.s2': 'אוטומציה ← כשחיישן הדלת נסגר ← לכבות את "{door}".',
+        'door.s3': 'זהו. מעכשיו הנעילה האוטומטית מחכה שהדלת תיסגר, וההתראות יודעות מתי היא פתוחה.',
+        'features.title': 'במנעול',
+        'f.unlatch': 'כפתור "פתיחת דלת"', 'f.unlatch.d': 'ב‑Home יופיע גם "פתיחה" שמושכת את הלשונית. (שינוי מחייב צימוד מחדש)',
+        'f.codes': 'קודים מ‑Home לקודן', 'f.codes.d': 'קוד שמוסיפים ב‑Home נכנס לקודן של נוקי, עם הגבלת ימים ושעות לאורחים. קודן: 6 ספרות 1–9, לא מתחיל ב‑12.',
+        'f.child': 'נעילת ילדים', 'f.child.d': 'מנטרלת את הכפתור הפיזי במנעול. צריך טוקן Nuki Web.',
+        'f.relock': 'נעילה אוטומטית — הזמן נקבע באפליקציית הבית (בכרטיס המנעול).',
+        'alerts.title': 'התראות',
+        'a.forced': 'חיישן פריצה', 'a.forced.d': 'נפתח אם הדלת נפתחה בזמן שהמנעול נעול. הפעילו לו התראות באפליקציית הבית.',
+        'a.forcedName': 'שם החיישן',
+        'a.left': 'חיישן "דלת נשארה פתוחה"', 'a.left.d': 'מתריע כשהדלת פתוחה יותר מהזמן שבחרתם.',
+        'a.leftMin': 'אחרי כמה דקות',
+        'a.repeat': 'לחזור על ההתראה כל עוד הדלת פתוחה',
+        'a.repeatMin': 'כל כמה דקות',
+        'a.leftName': 'שם החיישן',
+        'people.title': 'מי פתח (טביעת אצבע)',
+        'people.help': 'מחברים אדם מאפליקציית נוקי לקוד שלו ב‑Home, כדי ש‑Home יידע מי פתח. צריך טוקן ובדיקה בשלב 3.',
+        'people.none': 'לחצו "בדיקה" בשלב 3 כדי לטעון את האנשים מנוקי.',
+        'people.no': '— לא מחובר —',
+        'people.code': 'קוד ב‑Home: {name}',
+        'people.noCodes': 'עוד אין קודים ב‑Home. הוסיפו קוד בכרטיס המנעול ← ניהול גישה.',
+        'switches.title': 'מתגים לאוטומציות',
+        'switches.help': 'מתג שנדלק לרגע כשפותחים בדרך שבחרתם — לשימוש באוטומציה (למשל לנטרל אזעקה).',
+        'switches.name': 'שם',
+        'switches.fp': 'טביעת אצבע',
+        'switches.code': 'קוד',
+        'switches.add': '+ הוספת מתג',
+        'switches.remove': 'הסרה',
+        'custom.title': 'תכונות (מותאם אישית)',
+        'c.lock': 'מנעול ב‑Apple Home (Matter)',
+        'c.keypad': 'הקודן כאביזר (סוללה ולחיצות)',
+        'adv.title': 'מתקדם',
+        'adv.help': 'כל ההגדרות הטכניות (פורטים, ברוקר MQTT, קוד Matter) מופיעות בטופס למטה, באנגלית.',
+      },
+      en: {
+        title: 'Nuki for Apple Home',
+        subtitle: 'homebridge-nuki-mqtt-events',
+        unsaved: '💾 You have changes — press "Save" below, then restart Homebridge.',
+        'status.title': 'Status',
+        'status.nuki': 'Nuki connection',
+        'status.nukiOk': 'Connected',
+        'status.nukiNo': 'No message yet',
+        'status.lock': 'Lock in Apple Home',
+        'status.paired': 'Paired',
+        'status.notPaired': 'Waiting to be added',
+        'status.off': 'Off',
+        'status.battery': 'Battery',
+        'status.codes': 'Codes on the keypad',
+        'status.unknown': 'Homebridge has not run this version yet',
+        'status.pairHelp': 'In the Home app: Add Accessory → More options → enter the code:',
+        'setup.title': 'Choose what you want',
+        'setup.help': 'One click — every feature of the template is turned on with good defaults.',
+        'p.full': 'Everything', 'p.full.d': 'Lock in Home, lock after closing, child lock, codes, keypad, alerts and fingerprint',
+        'p.lock': 'Lock only', 'p.lock.d': 'Lock in Home with lock after closing, child lock, codes and alerts',
+        'p.fingerprint': 'Fingerprint only', 'p.fingerprint.d': 'A switch that turns on when the door is opened by fingerprint (e.g. to disarm an alarm)',
+        'p.custom': 'Custom', 'p.custom.d': 'Choose every feature yourself',
+        'mqtt.title': 'Connect the Nuki (once, in the Nuki app)',
+        'mqtt.s1': 'Open the Nuki app and select the lock.',
+        'mqtt.s2': 'Settings → Features & Configuration → MQTT → turn it on.',
+        'mqtt.s3': 'Host:',
+        'mqtt.s4': 'Port:',
+        'mqtt.s5': 'Leave user and password empty, and turn on "Allow lock actions". Save.',
+        'web.title': 'Nuki Web token (child lock and codes)',
+        'web.help': 'Needed for the child lock and for codes from Home on the keypad. Skip it if you do not need them.',
+        'web.s1': 'Go to web.nuki.io → menu: API → Generate API token.',
+        'web.s2': 'Tick only: View devices, View and edit devices, Manage device configuration, View and manage authorizations.',
+        'web.s3': 'Paste the token here and press "Test". (The first time, enter the lock\'s PIN in web.nuki.io.)',
+        'web.token': 'Token',
+        'web.test': 'Test',
+        'web.testing': 'Testing…',
+        'web.ok': '✅ Connected to the lock "{name}".',
+        'web.okAuths': '✅ Codes are allowed.',
+        'web.noAuths': '⚠️ The right "View and manage authorizations" is missing — codes will not reach the keypad.',
+        'web.bad': '❌ The token does not work or lacks rights.',
+        'web.failed': '❌ Could not check: {msg}',
+        'web.none': 'Paste a token first.',
+        'names.title': 'Names in Apple Home',
+        'names.lock': 'Lock name',
+        'names.lockHelp': 'Renaming after pairing: rename it in the Home app too.',
+        'names.door': 'Door sensor switch name',
+        'names.keypad': 'Keypad name',
+        'names.child': 'Child lock name',
+        'door.title': 'Connect a door sensor (Aqara, Eve…)',
+        'door.help': 'So the lock knows when the door is open, the plugin creates the switch "{door}". Link your door sensor to it with two Home automations:',
+        'door.s1': 'Automation → when the door sensor opens → turn "{door}" on.',
+        'door.s2': 'Automation → when the door sensor closes → turn "{door}" off.',
+        'door.s3': 'Done. Auto-lock now waits for the door to close, and the alerts know when it is open.',
+        'features.title': 'On the lock',
+        'f.unlatch': '"Unlatch" button', 'f.unlatch.d': 'Home also shows "Unlatch", which pulls the latch. (Changing this needs a re-pair)',
+        'f.codes': 'Codes from Home on the keypad', 'f.codes.d': 'A code added in Home goes onto the Nuki Keypad, with day/hour limits for guests. Keypad: 6 digits 1–9, not starting with 12.',
+        'f.child': 'Child lock', 'f.child.d': 'Turns off the physical button on the lock. Needs the Nuki Web token.',
+        'f.relock': 'Auto-lock — the time is set in the Home app (on the lock).',
+        'alerts.title': 'Alerts',
+        'a.forced': 'Forced-entry sensor', 'a.forced.d': 'Opens if the door opens while the lock is locked. Turn on its notifications in the Home app.',
+        'a.forcedName': 'Sensor name',
+        'a.left': '"Door left open" sensor', 'a.left.d': 'Alerts when the door has been open longer than you choose.',
+        'a.leftMin': 'After how many minutes',
+        'a.repeat': 'Repeat the alert while the door stays open',
+        'a.repeatMin': 'Every how many minutes',
+        'a.leftName': 'Sensor name',
+        'people.title': 'Who opened (fingerprint)',
+        'people.help': 'Link a person from the Nuki app to their code in Home, so Home knows who opened. Needs the token and "Test" in step 3.',
+        'people.none': 'Press "Test" in step 3 to load the people from Nuki.',
+        'people.no': '— not linked —',
+        'people.code': 'Home code: {name}',
+        'people.noCodes': 'No codes in Home yet. Add one on the lock → Manage Access.',
+        'switches.title': 'Switches for automations',
+        'switches.help': 'A switch that turns on for a moment when the door is opened the way you choose — use it in an automation (e.g. disarm an alarm).',
+        'switches.name': 'Name',
+        'switches.fp': 'Fingerprint',
+        'switches.code': 'Code',
+        'switches.add': '+ Add switch',
+        'switches.remove': 'Remove',
+        'custom.title': 'Features (Custom)',
+        'c.lock': 'Lock in Apple Home (Matter)',
+        'c.keypad': 'Keypad as an accessory (battery and presses)',
+        'adv.title': 'Advanced',
+        'adv.help': 'All technical settings (ports, MQTT broker, Matter code) are in the form below.',
+      },
+    };
+
+    const $ = (id) => document.getElementById(id);
+    let lang = 'en';
+    let cfg = null;
+    let status = null;
+    let ips = [];
+    let people = null;
+
+    const t = (key, vars) => {
+      let s = (STR[lang] && STR[lang][key]) || STR.en[key] || key;
+      for (const [k, v] of Object.entries(vars || {})) s = s.split('{' + k + '}').join(v);
+      return s;
+    };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const preset = () => cfg.preset || (hasOldSetup() ? 'custom' : 'full');
+    const hasOldSetup = () => !!(cfg.doorLock || cfg.childLock || cfg.keypad || (cfg.switches && cfg.switches.length));
+    const lockOn = () => ['full', 'lock'].includes(preset()) || (preset() === 'custom' && cfg.doorLock && cfg.doorLock.enabled);
+    const switchesOn = () => preset() !== 'lock';
+    const obj = (k) => (cfg[k] = cfg[k] || {});
+
+    async function save() {
+      await homebridge.updatePluginConfig([cfg]);
+      $('nk-save').style.display = 'block';
+    }
+
+    function applyLanguage() {
+      document.documentElement.setAttribute('dir', lang === 'he' ? 'rtl' : 'ltr');
+      document.documentElement.setAttribute('lang', lang);
+      for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.getAttribute('data-t'), { door: doorName() });
+      for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+      renderAll();
+    }
+
+    const doorName = () => (cfg && cfg.doorLock && cfg.doorLock.doorSwitchName) || 'Door Open';
+
+    function renderStatus() {
+      const box = $('nk-status');
+      const s = status;
+      if (!s) {
+        box.innerHTML = `<div>${esc(t('status.unknown'))}</div>`;
+        $('nk-pair').style.display = 'none';
+        return;
+      }
+      const fresh = s.lastSeen && Date.now() - Date.parse(s.lastSeen) < 7 * 24 * 3600 * 1000;
+      const m = s.matter;
+      const items = [
+        [t('status.nuki'), s.nukiId ? `<span class="nk-badge ok">${esc(t('status.nukiOk'))}</span> <span class="nk-ltr">${esc(s.nukiId)}</span>` : `<span class="nk-badge wait">${esc(t('status.nukiNo'))}</span>`],
+        [t('status.lock'), !lockOn() ? `<span class="nk-badge">${esc(t('status.off'))}</span>` : m && m.commissioned ? `<span class="nk-badge ok">${esc(t('status.paired'))}</span>` : `<span class="nk-badge wait">${esc(t('status.notPaired'))}</span>`],
+      ];
+      if (s.battery && s.battery.percent != null) items.push([t('status.battery'), `${s.battery.percent}%${s.battery.charging ? ' ⚡' : ''}`]);
+      if (s.codes && s.codes.length) items.push([t('status.codes'), String(s.codes.filter((c) => c.onKeypad).length)]);
+      box.innerHTML = items.map(([k, v]) => `<div><small>${esc(k)}</small>${v}</div>`).join('');
+      void fresh;
+      const showPair = lockOn() && m && !m.commissioned && m.manual;
+      $('nk-pair').style.display = showPair ? 'block' : 'none';
+      if (showPair) $('nk-pair-code').textContent = String(m.manual).replace(/^(\d{4})(\d{3})(\d{4})$/, '$1-$2-$3');
+    }
+
+    function renderPresets() {
+      const box = $('nk-presets');
+      const icons = { full: '⭐', lock: '🔒', fingerprint: '👆', custom: '⚙️' };
+      box.innerHTML = '';
+      for (const p of ['full', 'lock', 'fingerprint', 'custom']) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nk-preset';
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String(preset() === p));
+        b.innerHTML = `<span class="nk-ico">${icons[p]}</span><b>${esc(t('p.' + p))}</b><span>${esc(t('p.' + p + '.d'))}</span>`;
+        b.addEventListener('click', async () => {
+          if (p === 'custom' && cfg.preset !== 'custom') {
+            // start Custom from what the current template turns on
+            const cur = preset();
+            const lock = cur === 'full' || cur === 'lock';
+            obj('doorLock').enabled = lock || !!(cfg.doorLock && cfg.doorLock.enabled);
+            obj('keypad').enabled = cur === 'full' || !!(cfg.keypad && cfg.keypad.enabled);
+            obj('childLock').enabled = (lock && !!(cfg.childLock && cfg.childLock.token)) || !!(cfg.childLock && cfg.childLock.enabled);
+            cfg.childLock.style = cfg.childLock.style || 'matter';
+          }
+          cfg.preset = p;
+          await save();
+          renderAll();
+        });
+        box.appendChild(b);
+      }
+    }
+
+    function input(id, value, placeholder, onChange, type) {
+      const el = document.createElement('input');
+      el.className = 'form-control';
+      el.id = id;
+      el.type = type || 'text';
+      el.dir = type === 'number' ? 'ltr' : 'auto';
+      if (value != null) el.value = value;
+      if (placeholder) el.placeholder = placeholder;
+      el.addEventListener('change', () => onChange(type === 'number' ? (el.value === '' ? undefined : Number(el.value)) : el.value.trim() || undefined));
+      return el;
+    }
+
+    function field(labelKey, el, hintKey) {
+      const d = document.createElement('div');
+      d.className = 'nk-field';
+      const l = document.createElement('label');
+      l.htmlFor = el.id;
+      l.textContent = t(labelKey);
+      d.appendChild(l);
+      d.appendChild(el);
+      if (hintKey) {
+        const h = document.createElement('div');
+        h.className = 'nk-hint';
+        h.textContent = t(hintKey);
+        d.appendChild(h);
+      }
+      return d;
+    }
+
+    function toggle(id, checked, titleKey, descKey, onChange) {
+      const l = document.createElement('label');
+      l.className = 'nk-switch';
+      l.htmlFor = id;
+      l.innerHTML = `<input type="checkbox" id="${id}"><span><b>${esc(t(titleKey))}</b>${descKey ? `<span class="nk-hint" style="display:block;margin:0">${esc(t(descKey))}</span>` : ''}</span>`;
+      const cb = l.querySelector('input');
+      cb.checked = !!checked;
+      cb.addEventListener('change', () => onChange(cb.checked));
+      return l;
+    }
+
+    function renderNames() {
+      const box = $('nk-names');
+      box.innerHTML = '';
+      if (lockOn()) {
+        box.appendChild(field('names.lock', input('nk-n-lock', cfg.doorLock && cfg.doorLock.name, 'Front Door', async (v) => { obj('doorLock').name = v; await save(); }), 'names.lockHelp'));
+        box.appendChild(field('names.door', input('nk-n-door', cfg.doorLock && cfg.doorLock.doorSwitchName, 'Door Open', async (v) => { obj('doorLock').doorSwitchName = v; await save(); applyLanguage(); })));
+        box.appendChild(field('names.child', input('nk-n-child', cfg.childLock && cfg.childLock.name, 'Child Lock', async (v) => { obj('childLock').name = v; await save(); })));
+      }
+      if (preset() === 'full' || (preset() === 'custom' && cfg.keypad && cfg.keypad.enabled)) {
+        box.appendChild(field('names.keypad', input('nk-n-keypad', cfg.keypad && cfg.keypad.name, 'Nuki Keypad', async (v) => { obj('keypad').name = v; await save(); })));
+      }
+      $('nk-names-card').style.display = box.children.length ? '' : 'none';
+    }
+
+    function renderFeatures() {
+      const box = $('nk-features');
+      box.innerHTML = '';
+      const d = cfg.doorLock || {};
+      box.appendChild(toggle('nk-f-unlatch', d.unlatch !== false, 'f.unlatch', 'f.unlatch.d', async (v) => { obj('doorLock').unlatch = v; await save(); }));
+      box.appendChild(toggle('nk-f-codes', d.accessCodes !== false, 'f.codes', 'f.codes.d', async (v) => { obj('doorLock').accessCodes = v; await save(); }));
+      if (preset() === 'custom') box.appendChild(toggle('nk-f-child', cfg.childLock && cfg.childLock.enabled, 'f.child', 'f.child.d', async (v) => { obj('childLock').enabled = v; cfg.childLock.style = cfg.childLock.style || 'matter'; await save(); }));
+      const p = document.createElement('p');
+      p.className = 'nk-hint';
+      p.textContent = '⏱️ ' + t('f.relock');
+      box.appendChild(p);
+    }
+
+    function renderAlerts() {
+      const box = $('nk-alerts');
+      box.innerHTML = '';
+      const a = (cfg.doorLock && cfg.doorLock.alerts) || {};
+      const set = async (k, v) => { obj('doorLock'); cfg.doorLock.alerts = { ...(cfg.doorLock.alerts || {}), [k]: v }; await save(); };
+      box.appendChild(toggle('nk-a-forced', a.forcedOpen !== false, 'a.forced', 'a.forced.d', async (v) => { await set('forcedOpen', v); renderAlerts(); }));
+      if (a.forcedOpen !== false) box.appendChild(field('a.forcedName', input('nk-a-fname', a.forcedName, 'Door Forced Open', (v) => set('forcedName', v))));
+      const leftOn = a.leftOpenMinutes !== 0;
+      box.appendChild(toggle('nk-a-left', leftOn, 'a.left', 'a.left.d', async (v) => { await set('leftOpenMinutes', v ? 5 : 0); renderAlerts(); }));
+      if (leftOn) {
+        box.appendChild(field('a.leftMin', input('nk-a-lmin', a.leftOpenMinutes ?? 5, '5', (v) => set('leftOpenMinutes', v || 5), 'number')));
+        box.appendChild(toggle('nk-a-rep', a.repeat !== false, 'a.repeat', null, async (v) => { await set('repeat', v); renderAlerts(); }));
+        if (a.repeat !== false) box.appendChild(field('a.repeatMin', input('nk-a-rmin', a.repeatMinutes ?? a.leftOpenMinutes ?? 5, '5', (v) => set('repeatMinutes', v), 'number')));
+        box.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
+      }
+    }
+
+    function renderPeople() {
+      const box = $('nk-people');
+      box.innerHTML = '';
+      if (!people) { box.innerHTML = `<li>${esc(t('people.none'))}</li>`; return; }
+      const codes = (status && status.codes) || [];
+      if (!codes.length) { box.innerHTML = `<li>${esc(t('people.noCodes'))}</li>`; }
+      const linked = (cfg.doorLock && cfg.doorLock.people) || [];
+      for (const person of people) {
+        const li = document.createElement('li');
+        const cur = linked.find((x) => Number(x.authId) === Number(person.authId));
+        const sel = document.createElement('select');
+        sel.className = 'form-control form-control-sm';
+        sel.innerHTML = `<option value="">${esc(t('people.no'))}</option>` + codes.map((c) => `<option value="${c.index}">${esc(t('people.code', { name: c.name || ('#' + c.index) }))}</option>`).join('');
+        sel.value = cur ? String(cur.homeCode) : '';
+        sel.addEventListener('change', async () => {
+          const list = linked.filter((x) => Number(x.authId) !== Number(person.authId));
+          if (sel.value) list.push({ name: person.name, authId: person.authId, homeCode: Number(sel.value) });
+          obj('doorLock').people = list;
+          await save();
+          renderPeople();
+        });
+        li.innerHTML = `<span>${esc(person.name)}${person.fingerprints ? ' 👆' : ''}</span>`;
+        li.appendChild(sel);
+        box.appendChild(li);
+      }
+    }
+
+    function renderSwitches() {
+      const box = $('nk-switches');
+      box.innerHTML = '';
+      const list = cfg.switches && cfg.switches.length ? cfg.switches : [{ name: 'Nuki Fingerprint', sources: ['fingerprint'] }];
+      list.forEach((sw, i) => {
+        const li = document.createElement('li');
+        const name = input('nk-sw-' + i, sw.name, 'Nuki Fingerprint', async (v) => { list[i].name = v || 'Nuki Fingerprint'; cfg.switches = list; await save(); });
+        name.style.maxWidth = '14rem';
+        li.appendChild(name);
+        const src = document.createElement('span');
+        src.className = 'nk-row';
+        for (const s of ['fingerprint', 'code']) {
+          const l = document.createElement('label');
+          l.className = 'nk-switch';
+          l.style.margin = '0';
+          l.innerHTML = `<input type="checkbox"><span>${esc(t(s === 'fingerprint' ? 'switches.fp' : 'switches.code'))}</span>`;
+          const cb = l.querySelector('input');
+          cb.checked = (sw.sources || ['fingerprint']).includes(s);
+          cb.addEventListener('change', async () => {
+            const set = new Set(list[i].sources || ['fingerprint']);
+            if (cb.checked) set.add(s); else set.delete(s);
+            list[i].sources = [...set];
+            cfg.switches = list;
+            await save();
+          });
+          src.appendChild(l);
+        }
+        li.appendChild(src);
+        if (list.length > 1) {
+          const rm = document.createElement('button');
+          rm.type = 'button';
+          rm.className = 'btn btn-outline-danger btn-sm m-0';
+          rm.textContent = t('switches.remove');
+          rm.addEventListener('click', async () => { list.splice(i, 1); cfg.switches = list; await save(); renderSwitches(); });
+          li.appendChild(rm);
+        }
+        box.appendChild(li);
+      });
+    }
+
+    function renderCustom() {
+      const show = preset() === 'custom';
+      $('nk-custom').style.display = show ? '' : 'none';
+      if (!show) return;
+      const box = $('nk-custom-body');
+      box.innerHTML = '';
+      box.appendChild(toggle('nk-c-lock', cfg.doorLock && cfg.doorLock.enabled, 'c.lock', null, async (v) => { obj('doorLock').enabled = v; await save(); renderAll(); }));
+      box.appendChild(toggle('nk-c-keypad', cfg.keypad && cfg.keypad.enabled, 'c.keypad', null, async (v) => { obj('keypad').enabled = v; await save(); renderAll(); }));
+    }
+
+    function renderAll() {
+      renderStatus();
+      renderPresets();
+      $('nk-ip').textContent = ips.length ? ips.join(' / ') : '—';
+      $('nk-port').textContent = String(cfg.brokerPort || 1883);
+      const needWeb = preset() !== 'fingerprint';
+      $('nk-web-card').style.display = needWeb ? '' : 'none';
+      const tok = $('nk-token');
+      if (document.activeElement !== tok) tok.value = (cfg.childLock && cfg.childLock.token) || '';
+      for (const el of document.querySelectorAll('[data-need="lock"]')) el.style.display = lockOn() ? '' : 'none';
+      for (const el of document.querySelectorAll('[data-need="switches"]')) el.style.display = switchesOn() ? '' : 'none';
+      renderNames();
+      renderFeatures();
+      renderAlerts();
+      renderPeople();
+      renderSwitches();
+      renderCustom();
+      for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.getAttribute('data-t'), { door: doorName() });
+    }
+
+    async function testToken() {
+      const res = $('nk-web-result');
+      const token = $('nk-token').value.trim();
+      if (!token) { res.textContent = t('web.none'); return; }
+      res.textContent = t('web.testing');
+      try {
+        const r = await homebridge.request('/nuki-web', { token, nukiId: (status && status.nukiId) || cfg.deviceId || null });
+        res.innerHTML = esc(t('web.ok', { name: r.name || '' })) + '<br>' + esc(r.canAuths ? t('web.okAuths') : t('web.noAuths'));
+        people = r.people || [];
+        renderPeople();
+      } catch (e) {
+        const code = e && e.error && e.error.code;
+        res.textContent = code === 'badToken' ? t('web.bad') : t('web.failed', { msg: (e && e.message) || String(e) });
+      }
+    }
+
+    async function init() {
+      const list = await homebridge.getPluginConfig();
+      cfg = list && list[0] ? list[0] : { platform: 'NukiMqttEvents', name: 'Nuki MQTT Events' };
+      if (!list || !list[0]) await homebridge.updatePluginConfig([cfg]);
+      lang = cfg.uiLanguage || ((navigator.language || '').toLowerCase().startsWith('he') ? 'he' : 'en');
+      try { const r = await homebridge.request('/status'); status = r.status; ips = r.ips || []; } catch (e) { status = null; }
+      applyLanguage();
+
+      for (const b of document.querySelectorAll('[data-lang]')) {
+        b.addEventListener('click', async () => { lang = b.dataset.lang; cfg.uiLanguage = lang; await homebridge.updatePluginConfig([cfg]); applyLanguage(); });
+      }
+      $('nk-token').addEventListener('change', async () => { obj('childLock').token = $('nk-token').value.trim() || undefined; if (preset() !== 'custom') cfg.childLock.style = 'matter'; await save(); });
+      $('nk-test').addEventListener('click', testToken);
+      $('nk-add-switch').addEventListener('click', async () => {
+        const list = cfg.switches && cfg.switches.length ? cfg.switches : [{ name: 'Nuki Fingerprint', sources: ['fingerprint'] }];
+        list.push({ name: 'Nuki Code', sources: ['code'] });
+        cfg.switches = list;
+        await save();
+        renderSwitches();
+      });
+      $('nk-adv').addEventListener('toggle', () => { if ($('nk-adv').open) homebridge.showSchemaForm(); else homebridge.hideSchemaForm(); });
+      homebridge.hideSchemaForm();
+      if (cfg.childLock && cfg.childLock.token) testToken();
+    }
+
+    // The advanced form below changed something: take it over
+    homebridge.addEventListener('configChanged', async () => {
+      const list = await homebridge.getPluginConfig();
+      if (list && list[0]) cfg = list[0];
+      $('nk-save').style.display = 'block';
+      renderAll();
+    });
+
+    init().catch((e) => homebridge.toast.error(String((e && e.message) || e)));
+  })();
+</script>

@@ -18,6 +18,34 @@ const UNLOCKED_STATES = [3, 5, 6];
 module.exports = (api) => api.registerPlatform(PLUGIN, PLATFORM, NukiMqttEvents);
 
 
+
+// Matter schedules → Nuki authorization limits (the keypad holds one day mask, one time window, one date range)
+const NUKI_DAY = { sunday: 1, monday: 64, tuesday: 32, wednesday: 16, thursday: 8, friday: 4, saturday: 2 };
+const MATTER_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+function nukiLimits(sched) {
+  const out = { allowedWeekDays: 127, allowedFromTime: 0, allowedUntilTime: 0, allowedFromDate: null, allowedUntilDate: null };
+  if (!sched) return out;
+  const week = sched.week || [];
+  if (week.length) {
+    let mask = 0, from = 24 * 60, until = 0;
+    for (const w of week) {
+      const dm = w.daysMask;
+      MATTER_DAYS.forEach((d, i) => { if (typeof dm === 'number' ? dm & (1 << i) : dm && dm[d]) mask |= NUKI_DAY[d]; });
+      from = Math.min(from, w.startHour * 60 + w.startMinute);
+      until = Math.max(until, w.endHour * 60 + w.endMinute);
+    }
+    out.allowedWeekDays = mask || 127;
+    if (!(from === 0 && until >= 23 * 60 + 59)) { out.allowedFromTime = from; out.allowedUntilTime = until; }
+  }
+  const year = sched.year || [];
+  if (year.length) {
+    const local = (t) => { const d = new Date((t + 946684800) * 1000); return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()).toISOString(); };
+    out.allowedFromDate = local(Math.min(...year.map((y) => y.localStartTime)));
+    out.allowedUntilDate = local(Math.max(...year.map((y) => y.localEndTime)));
+  }
+  return out;
+}
+
 const FINGERPRINT_SWITCH = { name: 'Nuki Fingerprint', sources: ['fingerprint'], actions: ['unlock', 'unlatch', 'locknGoUnlatch'] };
 
 // Ready-made setups ("Quick setup" in the settings). A config without a preset keeps working as before (custom).
@@ -28,7 +56,7 @@ function applyPreset(cfg, log) {
   const token = c.childLock && c.childLock.token;
   const lock = preset === 'full' || preset === 'lock';
   c.doorLock = { ...(c.doorLock || {}), enabled: lock };
-  if (lock) c.doorLock.accessCodes = !!token;
+  if (lock) c.doorLock.accessCodes = !!token && c.doorLock.accessCodes !== false;
   c.keypad = { ...(c.keypad || {}), enabled: preset === 'full' };
   c.childLock = { ...(c.childLock || {}), enabled: lock && !!token, style: 'matter' };
   if (preset === 'lock') c.noSwitches = true; // lock only: no extra switches
@@ -69,7 +97,7 @@ class NukiMqttEvents {
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
-      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -115,6 +143,7 @@ class NukiMqttEvents {
 
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
+    if (this.lockCfg) for (const id of this.setupAlerts()) keep.add(id);
     if (this.childCfg && this.childCfg.style !== 'matter') {
       try { keep.add(this.setupChildLock()); } catch (e) { this.log.error(`Child lock setup failed: ${e.stack || e.message}`); }
     }
@@ -150,6 +179,93 @@ class NukiMqttEvents {
     this.keypadBtn = btn;
     this.keypadBat = bat;
     return id;
+  }
+
+  // ---------- Door alerts: forced open, left open (repeats while open) ----------
+
+  alertCfg() {
+    const a = (this.lockCfg && this.lockCfg.alerts) || {};
+    return {
+      forced: a.forcedOpen !== false,
+      forcedName: a.forcedName || 'Door Forced Open',
+      leftMin: a.leftOpenMinutes === undefined || a.leftOpenMinutes === null || a.leftOpenMinutes === '' ? 5 : Number(a.leftOpenMinutes) || 0,
+      repeatMin: a.repeat === false ? 0 : Number(a.repeatMinutes) || Number(a.leftOpenMinutes) || 5,
+      leftName: a.leftOpenName || 'Door Left Open',
+    };
+  }
+
+  sensorAcc(key, name, model) {
+    const { Service, Characteristic, uuid } = this.api.hap;
+    const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:${key}`);
+    let acc = this.cached.get(id);
+    if (!acc) {
+      acc = new this.api.platformAccessory(name, id);
+      this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
+    }
+    acc.getService(Service.AccessoryInformation)
+      .setCharacteristic(Characteristic.Manufacturer, 'Nuki')
+      .setCharacteristic(Characteristic.Model, model)
+      .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-${key}`);
+    const svc = acc.getService(Service.ContactSensor) || acc.addService(Service.ContactSensor, name);
+    svc.getCharacteristic(Characteristic.ContactSensorState).onGet(() => (this.alertState[key] ? 1 : 0));
+    this.alertSvc[key] = svc;
+    return id;
+  }
+
+  setupAlerts() {
+    const c = this.alertCfg(), ids = [];
+    this.alertState = this.alertState || {};
+    this.alertSvc = {};
+    if (c.forced) ids.push(this.sensorAcc('forced-open', c.forcedName, 'Door Forced Open'));
+    if (c.leftMin > 0) ids.push(this.sensorAcc('left-open', c.leftName, 'Door Left Open'));
+    return ids;
+  }
+
+  setAlert(key, on) {
+    this.alertState[key] = on;
+    const svc = this.alertSvc && this.alertSvc[key];
+    if (svc) svc.updateCharacteristic(this.api.hap.Characteristic.ContactSensorState, on ? 1 : 0);
+  }
+
+  // Remember when someone used the lock, so a door opened right after an unlock is not "forced"
+  touchLock() { this.lockActivityAt = Date.now(); }
+
+  doorAlerts(open) {
+    if (!this.alertState) return;
+    const c = this.alertCfg();
+    clearTimeout(this.leftTimer); clearTimeout(this.leftPulse);
+    if (!open) {
+      if (this.alertState['forced-open']) this.log.info('Door closed — forced-open alert cleared');
+      this.setAlert('forced-open', false);
+      this.setAlert('left-open', false);
+      return;
+    }
+    // Checked a few seconds later, so a lock state that arrives just after the door sensor is taken into account
+    const openedAt = Date.now();
+    if (c.forced) {
+      setTimeout(() => {
+        if (this.doorOpen !== true || this.doorOpenedAt !== openedAt) return;
+        const recent = openedAt - (this.lockActivityAt || 0) < (this.forcedGraceMs ?? 15000);
+        if (this.nukiState !== 1 || recent) return;
+        this.log.warn('ALERT: the door was opened while the lock is locked (forced open)');
+        this.setAlert('forced-open', true);
+        if (this.matter && this.matter.reportAlarm) this.matter.reportAlarm(6).catch(() => {});
+      }, this.forcedCheckMs ?? 3000);
+    }
+    this.doorOpenedAt = openedAt;
+    if (c.leftMin > 0) {
+      const unit = this.alertMinuteMs ?? 60000;
+      const fire = () => {
+        this.log.warn(`ALERT: the door has been open for ${Math.round((Date.now() - this.doorOpenedAt) / unit)} min`);
+        if (this.alertState['left-open']) { // already on: closed → open again = a new notification
+          this.setAlert('left-open', false);
+          this.leftPulse = setTimeout(() => this.setAlert('left-open', true), this.alertPulseMs ?? 2000);
+        } else this.setAlert('left-open', true);
+        if (this.matter && this.matter.reportAlarm) this.matter.reportAlarm(7).catch(() => {});
+        if (c.repeatMin > 0) this.leftTimer = setTimeout(fire, c.repeatMin * unit);
+      };
+      this.leftTimer = setTimeout(fire, c.leftMin * unit);
+    }
   }
 
   onKeypadBattery(raw) {
@@ -350,6 +466,7 @@ class NukiMqttEvents {
   }
 
   saveCodes() {
+    this.writeStatus();
     const fs = require('fs');
     try {
       fs.mkdirSync(require('path').dirname(this.codesFile()), { recursive: true });
@@ -381,6 +498,45 @@ class NukiMqttEvents {
     }
     this.saveCodes();
     this.syncCodesSoon();
+  }
+
+  // A small status file for the settings page (pairing code, codes on the keypad, last message from the lock)
+  writeStatus() {
+    clearTimeout(this.statusTimer);
+    this.statusTimer = setTimeout(() => {
+      try {
+        const fs = require('fs'), path = require('path');
+        const dir = path.join(this.api.user.storagePath(), 'nuki-matter-lock');
+        fs.mkdirSync(dir, { recursive: true });
+        const pairing = this.matter && this.matter.pairing ? this.matter.pairing() : null;
+        const codes = Object.entries(this.codeMap || {}).filter(([, e]) => !e.removed)
+          .map(([i, e]) => ({ index: Number(i), name: e.name || null, onKeypad: !!e.id || (e.synced && e.skipped !== e.code), keypadOk: !this.checkCode(String(e.code || '')), limited: JSON.stringify(this.limitsFor(e.userIndex)) !== JSON.stringify(this.limitsFor(null)) }));
+        const status = {
+          at: new Date().toISOString(), version: require('./package.json').version,
+          nukiId: this.nukiId || null, lastSeen: this.lastSeen || null, nukiState: this.nukiState,
+          battery: this.battery, doorOpen: this.doorOpen, matter: pairing, codes, childOn: this.childOn,
+        };
+        fs.writeFileSync(path.join(dir, 'ui-status.json'), JSON.stringify(status, null, 2));
+      } catch (e) { /* the status file is only for the settings page */ }
+    }, 1000);
+  }
+
+  limitsFile() { return require('path').join(this.api.user.storagePath(), 'nuki-matter-lock', 'keypad-limits.json'); }
+
+  // Home set or cleared a guest schedule: the user's keypad codes get the same days / hours / dates
+  onSchedule(userIndex, sched) {
+    if (!this.userLimits) { try { this.userLimits = JSON.parse(require('fs').readFileSync(this.limitsFile(), 'utf8')); } catch (e) { this.userLimits = {}; } }
+    const empty = !(sched.week && sched.week.length) && !(sched.year && sched.year.length);
+    if (empty) delete this.userLimits[userIndex]; else this.userLimits[userIndex] = sched;
+    try { require('fs').writeFileSync(this.limitsFile(), JSON.stringify(this.userLimits), { mode: 0o600 }); } catch (e) { /* folder not there yet */ }
+    this.log.info(`Access codes: ${empty ? 'no time limits' : 'time limits'} for Home user ${userIndex}`);
+    if (!this.codeMap) this.loadCodes();
+    this.syncCodesSoon();
+  }
+
+  limitsFor(userIndex) {
+    if (!this.userLimits) { try { this.userLimits = JSON.parse(require('fs').readFileSync(this.limitsFile(), 'utf8')); } catch (e) { this.userLimits = {}; } }
+    return nukiLimits(userIndex != null ? this.userLimits[userIndex] : null);
   }
 
   // Home removed a code (by its index), every code of a user, or all codes
@@ -416,6 +572,8 @@ class NukiMqttEvents {
       const e = this.codeMap[i];
       const name = e.homeName || (active.length === 1 ? base : `${base} ${n + 1}`);
       if (e.name !== name) { if (e.name) e.oldName = e.name; e.name = name; e.synced = false; }
+      const lim = JSON.stringify(this.limitsFor(e.userIndex));
+      if (e.id && JSON.stringify(e.sentLimits || this.limitsFor(null)) !== lim) e.synced = false;
     });
   }
 
@@ -451,11 +609,15 @@ class NukiMqttEvents {
           if (!e.id) { const f = await web.findKeypadCode(e.code); if (f) e.id = f.id; } // already there (id not known yet)
           if (e.id && !(await web.listAuths()).some((a) => a.id === e.id)) { e.id = null; e.authId = null; } // deleted in the Nuki app: create it again
           if (e.id) {
-            await web.updateKeypadCode(e.id, { name, code: e.code });
+            const limits = this.limitsFor(e.userIndex);
+            await web.updateKeypadCode(e.id, { name, code: e.code, ...limits });
+            e.sentLimits = limits;
             this.log.info(`Access codes: updated ${e.oldName && e.oldName !== name ? `"${e.oldName}" → ` : ''}"${name}" on the Nuki Keypad`);
             delete e.oldName;
           } else {
-            e.id = await web.addKeypadCode(name, e.code);
+            const limits = this.limitsFor(e.userIndex);
+            e.id = await web.addKeypadCode(name, e.code, limits);
+            e.sentLimits = limits;
             const auth = e.id && (await web.listAuths()).find((a) => a.id === e.id);
             if (auth) e.authId = auth.authId;
             this.log.info(`Access codes: added "${name}" to the Nuki Keypad${e.id ? '' : ' (its Nuki Web entry will be looked up when needed)'}`);
@@ -473,7 +635,20 @@ class NukiMqttEvents {
 
   // Home user (and code) behind a keypad unlock, for "unlocked by <name>" in Home
   codeUser(ev) {
-    if (!ev || !this.codeMap) return null;
+    if (!ev) return null;
+    // Fingerprint (or Nuki-app code) of a person linked in the settings to their Apple Home code
+    const people = (this.lockCfg && this.lockCfg.people) || [];
+    const person = people.find((x) => x && x.authId != null && Number(x.authId) === ev.authId);
+    if (person && person.homeCode != null) {
+      if (!this.codeMap) this.loadCodes();
+      const e = this.codeMap[person.homeCode];
+      const userIndex = (e && e.userIndex) || Number(person.homeUser) || null;
+      if (userIndex) {
+        this.log.info(`Opened by ${person.name || `Nuki person ${ev.authId}`} (Apple Home user ${userIndex})`);
+        return { userIndex, credIndex: Number(person.homeCode) };
+      }
+    }
+    if (!this.codeMap) return null;
     for (const [i, e] of Object.entries(this.codeMap)) {
       if (e.authId != null && e.userIndex && (e.authId === ev.authId || e.authId === ev.codeId)) return { userIndex: e.userIndex, credIndex: Number(i) };
     }
@@ -531,6 +706,7 @@ class NukiMqttEvents {
     if (this.doorAcc) this.doorAcc.context.doorOpen = open;
     if (!changed) return;
     this.log.info(`Door ${open ? 'opened' : 'closed'} (${why})`);
+    this.doorAlerts(open);
     if (this.matter) this.matter.setDoorOpen(open).catch((e) => this.log.warn(`Matter lock: could not update door state: ${e.message}`));
     if (open) {
       if (this.relockTimer) this.log.info('Door opened — auto-lock paused until it closes');
@@ -575,11 +751,12 @@ class NukiMqttEvents {
     try {
       this.matter = await this.openMatterLock(opts);
       if (this.nukiState !== null) this.pushLockState();
+      this.writeStatus();
     } catch (e) {
       this.log.error(`Matter lock could not start: ${e.stack || e.message}`);
       if (opts.childLock || this.lockCfg.accessCodes !== false) {
         this.log.warn('Matter lock: starting again without the child-lock and access-code profile');
-        try { this.matter = await this.openMatterLock({ childLock: false, accessCodes: false }); if (this.nukiState !== null) this.pushLockState(); } catch (e2) { this.log.error(`Matter lock could not start: ${e2.message}`); }
+        try { this.matter = await this.openMatterLock({ childLock: false, accessCodes: false, unlatch: false }); if (this.nukiState !== null) this.pushLockState(); } catch (e2) { this.log.error(`Matter lock could not start: ${e2.message}`); }
       }
     }
   }
@@ -596,6 +773,7 @@ class NukiMqttEvents {
         onChildLock: (on) => this.applyChild(on),
         onCodes: (list, fresh, userIndex) => this.onCodes(list, fresh, userIndex),
         onCodesRemoved: (what) => this.onCodesRemoved(what),
+        onSchedule: (userIndex, sched) => this.onSchedule(userIndex, sched),
       }, {
         storagePath: path.join(this.api.user.storagePath(), 'nuki-matter-lock'),
         port: Number(c.matterPort) || 5560,
@@ -608,6 +786,7 @@ class NukiMqttEvents {
         battery: this.battery,
         childLock: opts.childLock,
         accessCodes: opts.accessCodes !== false && c.accessCodes !== false,
+        unlatch: opts.unlatch !== false && c.unlatch !== false,
         childLockName: this.childCfg && this.childCfg.name,
         childOn: this.childOn,
         matterLogLevel: c.matterLogLevel,
@@ -629,13 +808,15 @@ class NukiMqttEvents {
   // Send a lock action to the Nuki and wait until it reports the target state.
   actuate(action, why) {
     if (!this.nukiId) return Promise.reject(new Error('Nuki device ID not known yet (no MQTT message received from the lock)'));
-    const done = action === 'lock' ? (s) => s === 1 : (s) => UNLOCKED_STATES.includes(s);
-    if (done(this.nukiState)) return Promise.resolve();
-    const code = action === 'lock' ? ACTIONS.lock : ACTIONS.unlock;
+    // unlatch = open the door (pull the latch); it is sent even when the lock is already unlocked
+    const done = action === 'lock' ? (s) => s === 1 : action === 'unlatch' ? (s) => s === 5 || s === 7 : (s) => UNLOCKED_STATES.includes(s);
+    if (action !== 'unlatch' && done(this.nukiState)) return Promise.resolve();
+    const code = ACTIONS[action] || ACTIONS.unlock;
     const topic = `${this.prefix}/${this.nukiId}/lockAction`;
-    this.log.info(`${action === 'lock' ? 'Locking' : 'Unlocking'} Nuki (${why}) → ${topic} = ${code}`);
-    const op = { action, at: Date.now() };
+    this.log.info(`${{ lock: 'Locking', unlock: 'Unlocking', unlatch: 'Opening (unlatch)' }[action] || action} Nuki (${why}) → ${topic} = ${code}`);
+    const op = { action: action === 'unlatch' ? 'unlock' : action, at: Date.now() };
     if (why === 'Home (Matter)' || why === 'Matter auto-relock') this.matterOp = op; else this.pluginOp = op;
+    this.touchLock();
     this.publish(topic, String(code));
     const timeoutMs = (Number(this.lockCfg && this.lockCfg.actionTimeout) || 30) * 1000;
     return new Promise((resolve, reject) => {
@@ -658,6 +839,7 @@ class NukiMqttEvents {
     if (!Number.isFinite(s) || s === this.nukiState) return;
     const wasUnlocked = UNLOCKED_STATES.includes(this.nukiState);
     this.nukiState = s;
+    if (s !== 1) this.touchLock();
     if (s === 254) this.log.warn('Nuki state: MOTOR BLOCKED — the lock is jammed');
     else this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
     for (const w of [...this.stateWaiters]) w.check(s);
@@ -731,6 +913,7 @@ class NukiMqttEvents {
   }
 
   onMqtt(topic, payload, retained) {
+    if (!retained) { this.lastSeen = new Date().toISOString(); if (!this.statusTimer || Date.now() - (this.statusAt || 0) > 60000) { this.statusAt = Date.now(); this.writeStatus(); } }
     if (topic.endsWith('/keypadBatteryCritical') && topicMatches(this.batteryTopic(), topic)) {
       this.onKeypadBattery(payload);
     } else if (topicMatches(this.eventTopic(), topic)) {
@@ -817,6 +1000,7 @@ class NukiMqttEvents {
     const p = payload.split(',').map((x) => Number(x));
     const [action, trigger, authId, codeId, extra] = p;
     this.lastEvent = { action, trigger, authId, codeId, at: Date.now() };
+    this.touchLock();
     if (this.config.logEvents !== false) {
       this.log.info(`Event "${payload}" → action=${action} trigger=${trigger} authId=${authId} codeId=${codeId} extra=${extra}`);
     }

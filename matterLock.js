@@ -43,7 +43,10 @@ async function startMatterLock(p, o) {
 
   // Access codes: Home's "Manage Access" (people and their PIN codes). Each code Home adds is also created
   // on the Nuki Keypad through Nuki Web, and removed from it when it is removed in Home.
-  const features = ['DoorPositionSensor', ...(o.accessCodes ? ['User', 'PinCredential', 'CredentialOverTheAirAccess'] : [])];
+  // Unbolting: Home gets "Unlatch" (open the door) next to Unlock. Schedules: guest codes limited to days/hours/dates.
+  const features = ['DoorPositionSensor',
+    ...(o.unlatch ? ['Unbolting'] : []),
+    ...(o.accessCodes ? ['User', 'PinCredential', 'CredentialOverTheAirAccess', 'WeekDayAccessSchedules', 'YearDayAccessSchedules'] : [])];
   const PIN = 1; // CredentialType.Pin
   const snapshot = (st) => {
     const names = new Map((st.users || []).map((u) => [u.userIndex, u.userName || '']));
@@ -54,6 +57,10 @@ async function startMatterLock(p, o) {
       return { index: c.credentialIndex, userIndex, name: names.get(userIndex) || '' };
     });
   };
+  const schedulesOf = (st, userIndex) => ({
+    week: (st.weekDaySchedules || []).filter((x) => x.userIndex === userIndex).map((x) => ({ ...x })),
+    year: (st.yearDaySchedules || []).filter((x) => x.userIndex === userIndex).map((x) => ({ ...x })),
+  });
   const changed = (self, codes, userIndex) => {
     if (!o.accessCodes || !p.onCodes) return;
     if (codes) {
@@ -73,7 +80,10 @@ async function startMatterLock(p, o) {
         p.log.warn(`Matter lock: refused to lock${auto ? ' (auto-relock)' : ''} while the door is open`);
         throw new Error('Door is open');
       }
-      await p.actuate(op.actuation === 'lock' ? 'lock' : 'unlock', auto ? 'Matter auto-relock' : 'Home (Matter)');
+      // With Unbolting, Matter "unlock" fully opens the door (unlatch) and "unbolt" only unlocks.
+      const action = op.actuation === 'lock' ? 'lock' : op.actuation === 'unbolt' ? 'unlock' : o.unlatch && !auto ? 'unlatch' : 'unlock';
+      if (o.accessCodes && op.actuation !== 'lock') p.log.info(`Matter lock: Home ${op.actuation} → Nuki ${action}`);
+      await p.actuate(action, auto ? 'Matter auto-relock' : 'Home (Matter)');
     }
 
     setCredential(request) {
@@ -95,6 +105,32 @@ async function startMatterLock(p, o) {
     setUser(request) {
       if (o.accessCodes) p.log.info(`Matter lock: Home setUser op=${request.operationType} user=${request.userIndex} status=${request.userStatus}`);
       return Promise.resolve(super.setUser(request)).then((r) => { changed(this); return r; });
+    }
+
+    setWeekDaySchedule(request) {
+      const r = super.setWeekDaySchedule(request);
+      p.log.info(`Matter lock: Home setWeekDaySchedule user=${request.userIndex} days=${JSON.stringify(request.daysMask)} ${request.startHour}:${request.startMinute}-${request.endHour}:${request.endMinute}`);
+      if (p.onSchedule) p.onSchedule(request.userIndex, schedulesOf(this.state, request.userIndex));
+      return r;
+    }
+
+    clearWeekDaySchedule(request) {
+      const r = super.clearWeekDaySchedule(request);
+      if (p.onSchedule) p.onSchedule(request.userIndex, schedulesOf(this.state, request.userIndex));
+      return r;
+    }
+
+    setYearDaySchedule(request) {
+      const r = super.setYearDaySchedule(request);
+      p.log.info(`Matter lock: Home setYearDaySchedule user=${request.userIndex} ${request.localStartTime}-${request.localEndTime}`);
+      if (p.onSchedule) p.onSchedule(request.userIndex, schedulesOf(this.state, request.userIndex));
+      return r;
+    }
+
+    clearYearDaySchedule(request) {
+      const r = super.clearYearDaySchedule(request);
+      if (p.onSchedule) p.onSchedule(request.userIndex, schedulesOf(this.state, request.userIndex));
+      return r;
     }
 
     clearUser(request) {
@@ -161,6 +197,8 @@ async function startMatterLock(p, o) {
         wrongCodeEntryLimit: 5,
         userCodeTemporaryDisableTime: 60,
         requirePinForRemoteOperation: false,
+        numberOfWeekDaySchedulesSupportedPerUser: 4,
+        numberOfYearDaySchedulesSupportedPerUser: 4,
       } : {}),
     },
     powerSource: {
@@ -270,6 +308,13 @@ async function startMatterLock(p, o) {
         dl.events.doorLockAlarm.emit({ alarmCode: 0 }, agent.context);
       });
     },
+    // DoorLockAlarm: 6 door forced open, 7 door ajar (left open)
+    async reportAlarm(alarmCode) {
+      await endpoint.act((agent) => {
+        const dl = agent.get(NukiDoorLockServer);
+        dl.events.doorLockAlarm.emit({ alarmCode }, agent.context);
+      });
+    },
     // LockOperation event for a lock/unlock done outside Matter (source: 1 manual, 2 Nuki app, 3 keypad, 4 auto, 5 button)
     async reportOperation(action, source, userIndex = null, credIndex = null) {
       await endpoint.act((agent) => {
@@ -299,6 +344,10 @@ async function startMatterLock(p, o) {
     codes() {
       const st = endpoint.state.doorLock;
       return o.accessCodes && Array.isArray(st.credentials) && Array.isArray(st.users) ? snapshot(st) : null;
+    },
+    pairing() {
+      const c = node.state.commissioning;
+      return { commissioned: !!c.commissioned, manual: c.pairingCodes.manualPairingCode, qr: c.pairingCodes.qrPairingCode };
     },
     autoRelockTime() { return Number(endpoint.state.doorLock.autoRelockTime) || 0; },
     lockState() { return endpoint.state.doorLock.lockState; },

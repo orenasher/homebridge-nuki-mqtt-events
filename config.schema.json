@@ -332,8 +332,90 @@
             "type": "boolean",
             "default": true,
             "description": "People and codes added in Home are created on the Nuki Keypad too (6 digits 1-9, not starting with 12). Needs the Nuki Web token from the Child lock section with the scope \"View and manage authorizations\". Changing this needs a re-pair in Home."
+          },
+          "unlatch": {
+            "title": "\"Unlatch\" button in Home (open the door)",
+            "type": "boolean",
+            "default": true,
+            "description": "Changing this needs a re-pair in Home."
+          },
+          "alerts": {
+            "title": "Door alerts",
+            "type": "object",
+            "properties": {
+              "forcedOpen": {
+                "title": "Forced-entry sensor (door opened while locked)",
+                "type": "boolean",
+                "default": true
+              },
+              "forcedName": {
+                "title": "Forced-entry sensor name",
+                "type": "string",
+                "placeholder": "Door Forced Open"
+              },
+              "leftOpenMinutes": {
+                "title": "Door left open: alert after (minutes, 0 = off)",
+                "type": "integer",
+                "default": 5,
+                "minimum": 0
+              },
+              "repeat": {
+                "title": "Repeat while the door stays open",
+                "type": "boolean",
+                "default": true
+              },
+              "repeatMinutes": {
+                "title": "Repeat every (minutes)",
+                "type": "integer",
+                "minimum": 1
+              },
+              "leftOpenName": {
+                "title": "Door-left-open sensor name",
+                "type": "string",
+                "placeholder": "Door Left Open"
+              }
+            }
+          },
+          "people": {
+            "title": "Who opened: Nuki person → Home code",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "authId": {
+                  "title": "Nuki auth ID",
+                  "type": "integer"
+                },
+                "homeCode": {
+                  "title": "Home code number",
+                  "type": "integer"
+                }
+              }
+            }
           }
         }
+      },
+      "uiLanguage": {
+        "title": "Settings page language",
+        "type": "string",
+        "oneOf": [
+          {
+            "title": "English",
+            "enum": [
+              "en"
+            ]
+          },
+          {
+            "title": "עברית",
+            "enum": [
+              "he"
+            ]
+          }
+        ]
       }
     }
   },
@@ -436,8 +518,13 @@
         "doorLock.matterLogLevel",
         "childLock.lockName",
         "childLock.smartlockId",
-        "childLock.pollMinutes"
+        "childLock.pollMinutes",
+        "uiLanguage",
+        "doorLock.unlatch",
+        "doorLock.alerts",
+        "doorLock.people"
       ]
     }
-  ]
+  ],
+  "customUi": true
 }

@@ -1,8 +1,8 @@
 {
   "name": "homebridge-nuki-mqtt-events",
   "displayName": "Nuki MQTT Events",
-  "version": "1.14.0",
-  "description": "Nuki MQTT events as HomeKit switches (fingerprint / keypad), plus an optional standalone Matter door lock with door position for Apple Home's Lock After Closing. Built-in MQTT broker — no Home Assistant needed.",
+  "version": "1.15.0",
+  "description": "Nuki Smart Lock as a Matter lock in Apple Home: lock after closing, unlatch, Home codes on the Nuki Keypad, child lock, battery, door alerts and fingerprint switches. Built-in MQTT, no Home Assistant needed.",
   "main": "index.js",
   "author": "Oren Asher",
   "license": "MIT",
@@ -33,7 +33,8 @@
   },
   "dependencies": {
     "mqtt": "^5.10.0",
-    "@matter/main": "^0.18.0"
+    "@matter/main": "^0.18.0",
+    "@homebridge/plugin-ui-utils": "^2.0.0"
   },
   "files": [
     "index.js",
@@ -42,6 +43,8 @@
     "nukiWeb.js",
     "config.schema.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "homebridge-ui",
+    "README.he.md"
   ]
 }

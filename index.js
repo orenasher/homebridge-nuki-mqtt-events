@@ -242,6 +242,9 @@ class NukiMqttEvents {
         .map((a) => ({ authId: a.authId, name: String(a.name).trim() }));
       const old = this.loadPeople();
       this.peopleAt = Date.now();
+      // People the plugin learned from who actually opened stay, unless Nuki Web now knows them (then its name is used)
+      const known = new Set(list.map((x) => String(x.authId)));
+      for (const x of old) if (x.learned && !known.has(String(x.authId))) list.push(x);
       if (JSON.stringify(old) === JSON.stringify(list)) return;
       this.log.info(`People on the keypad: ${list.map((x) => x.name).join(', ') || '(none)'}`);
       const fs = require('fs');
@@ -265,12 +268,30 @@ class NukiMqttEvents {
 
   personOpened(ev) {
     if (!this.personSvc) return;
-    const hit = Object.values(this.personSvc).find(({ person }) => Number(person.authId) === ev.authId || Number(person.authId) === ev.codeId);
+    // Keypad openings carry the person's keypad ID as codeId (Nuki Web lists it as authId); the authId is the keypad's own
+    const key = ev.codeId > 0 ? ev.codeId : ev.authId;
+    const hit = Object.values(this.personSvc).find(({ person }) => Number(person.authId) === key);
     if (!hit) {
       if (!ev.retried && Date.now() - (this.peopleAt || 0) > 15000) {
-        this.log.info(`Opened by a keypad person not on the list yet (authId ${ev.authId}) — refreshing the list`);
+        this.log.info(`Opened by a keypad person not on the list yet (codeId ${ev.codeId}) — refreshing the list`);
         this.refreshPeople().then(() => this.personOpened({ ...ev, retried: true }));
+        return;
       }
+      // Nuki Web does not know this person (yet): make a sensor from who actually opened; rename it in the Home app
+      const id = ev.codeId || ev.authId;
+      if (!id) return;
+      const list = this.loadPeople();
+      if (!list.some((x) => String(x.authId) === String(id))) {
+        list.push({ authId: id, name: `Keypad ${id}`, learned: true });
+        try {
+          const fs = require('fs');
+          fs.mkdirSync(require('path').dirname(this.peopleFile()), { recursive: true });
+          fs.writeFileSync(this.peopleFile(), JSON.stringify(list, null, 2));
+        } catch (e) { /* ignore */ }
+        this.log.info(`New keypad person ${id} (not on Nuki Web) — added a sensor "Keypad ${id}"; rename it in the Home app`);
+        this.setupPersonSensors(list);
+      }
+      if (!ev.created) this.personOpened({ ...ev, retried: true, created: true });
       return;
     }
     const { svc, person } = hit;

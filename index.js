@@ -69,6 +69,7 @@ class NukiMqttEvents {
   constructor(log, config, api) {
     this.log = log;
     this.config = applyPreset(config || {}, log);
+    this.startedAt = Date.now();
     this.api = api;
     this.cached = new Map();
     this.switches = [];
@@ -247,6 +248,13 @@ class NukiMqttEvents {
         if (this.doorOpen !== true || this.doorOpenedAt !== openedAt) return;
         const recent = openedAt - (this.lockActivityAt || 0) < (this.forcedGraceMs ?? 15000);
         if (this.nukiState !== 1 || recent) return;
+        // Only trust "locked" when the Nuki is connected and its state is current (not right after a restart)
+        const settle = this.forcedSettleMs ?? 30000;
+        const embedded = this.mode === 'embedded';
+        const fresh = embedded
+          ? this.nukiOnline === true && openedAt - (this.nukiOnlineAt || 0) > settle
+          : openedAt - (this.startedAt || 0) > settle * 4;
+        if (!fresh) { this.log.info('Door opened while the lock state is not current (Nuki not connected yet) — no forced-open alert'); return; }
         this.log.warn('ALERT: the door was opened while the lock is locked (forced open)');
         this.setAlert('forced-open', true);
         if (this.matter && this.matter.reportAlarm) this.matter.reportAlarm(6).catch(() => {});
@@ -969,8 +977,14 @@ class NukiMqttEvents {
       }, 2000);
     });
     this.broker.on('warn', (m) => this.log.warn(`Broker: ${m}`));
-    this.broker.on('clientConnected', (cl) => this.log.info(`Broker: client "${cl.id}" connected from ${cl.socket.remoteAddress}`));
-    this.broker.on('clientDisconnected', (cl) => this.log.info(`Broker: client "${cl.id}" disconnected`));
+    this.broker.on('clientConnected', (cl) => {
+      this.log.info(`Broker: client "${cl.id}" connected from ${cl.socket.remoteAddress}`);
+      if (/^Nuki_/i.test(cl.id)) { this.nukiOnline = true; this.nukiOnlineAt = Date.now(); }
+    });
+    this.broker.on('clientDisconnected', (cl) => {
+      this.log.info(`Broker: client "${cl.id}" disconnected`);
+      if (/^Nuki_/i.test(cl.id)) this.nukiOnline = false;
+    });
     this.broker.on('message', (topic, payload, from) => {
       if (from === null) return; // our own publishes
       this.onMqtt(topic, payload.toString().trim(), false);

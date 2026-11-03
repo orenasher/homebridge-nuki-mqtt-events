@@ -845,7 +845,13 @@ class NukiMqttEvents {
     for (const w of [...this.stateWaiters]) w.check(s);
     this.pushLockState();
     const nowLocked = s === 1, nowUnlocked = UNLOCKED_STATES.includes(s);
-    if ((nowLocked && this.prevSettled === 3) || (nowUnlocked && this.prevSettled === 1)) this.reportOperation(nowLocked ? 'lock' : 'unlock');
+    // Report as soon as the motor starts (unlocking / locking), not when it has finished — Home's notification comes sooner
+    const early = (s === 2 || s === 7) && this.prevSettled === 1 ? 'unlock' : s === 4 && this.prevSettled === 3 ? 'lock' : null;
+    if (early) { this.earlyOp = { action: early, at: Date.now() }; this.reportOperation(early); }
+    const settled = nowLocked && this.prevSettled === 3 ? 'lock' : nowUnlocked && this.prevSettled === 1 ? 'unlock' : null;
+    const already = this.earlyOp && this.earlyOp.action === settled && Date.now() - this.earlyOp.at < 30000;
+    if (settled && !already) this.reportOperation(settled);
+    if (settled) this.earlyOp = null;
     if (nowLocked || nowUnlocked) this.prevSettled = s === 1 ? 1 : 3;
     if (s === 1) { clearTimeout(this.relockTimer); this.relockTimer = null; }
     if (UNLOCKED_STATES.includes(s) && !wasUnlocked) this.armRelock('unlocked');
@@ -860,6 +866,8 @@ class NukiMqttEvents {
     const byPlugin = fresh(this.pluginOp);
     this.pluginOp = null;
     clearTimeout(this.opTimer);
+    // No fixed wait when it is already known who did it; otherwise a short wait for the lock's action event
+    const known = byPlugin || (this.lastEvent && Date.now() - this.lastEvent.at < 15000);
     this.opTimer = setTimeout(() => {
       const ev = this.lastEvent && Date.now() - this.lastEvent.at < 15000 ? this.lastEvent : null;
       let source = 1; // Manual
@@ -871,7 +879,7 @@ class NukiMqttEvents {
       const who = source === 3 ? this.codeUser(ev) : null;
       this.lastEvent = null;
       this.matter.reportOperation(action, source, who ? who.userIndex : null, who ? who.credIndex : null).catch((e) => this.log.warn(`Matter lock: could not report ${action}: ${e.message}`));
-    }, 1500);
+    }, known ? 0 : (this.opWaitMs ?? 600));
   }
 
   // ---------- MQTT ----------

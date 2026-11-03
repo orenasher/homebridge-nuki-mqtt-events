@@ -376,27 +376,6 @@
               }
             }
           },
-          "people": {
-            "title": "Who opened: Nuki person → Home code",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "title": "Name",
-                  "type": "string"
-                },
-                "authId": {
-                  "title": "Nuki auth ID",
-                  "type": "integer"
-                },
-                "homeCode": {
-                  "title": "Home code number",
-                  "type": "integer"
-                }
-              }
-            }
-          },
           "showDoorState": {
             "title": "Show door open / closed on the lock in Home",
             "type": "boolean",
@@ -528,7 +507,6 @@
         "uiLanguage",
         "doorLock.unlatch",
         "doorLock.alerts",
-        "doorLock.people",
         "doorLock.showDoorState"
       ]
     }

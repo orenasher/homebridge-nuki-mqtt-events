@@ -15,7 +15,6 @@ Your Nuki Smart Lock as a **real Matter lock in Apple Home**, straight from Home
 | 🔋 **Battery** | Battery level and charging state; low-battery warning for the keypad. |
 | 🔔 **Notifications** | "Locked / Unlocked" also when the lock is used from the Nuki app, keypad, fingerprint or button. Jammed lock. |
 | 🚨 **Door alerts** | **Forced entry** (door opened while locked) and **door left open** (after 5 minutes, repeating while it stays open). |
-| 👤 **Who opened** | A fingerprint can be linked to the person's Home code. |
 | 👆 **Fingerprint switch** | A switch for automations, e.g. open by fingerprint → disarm the alarm. |
 
 **Tested on the Nuki Smart Lock Ultra.** It should work with every Nuki that has built-in MQTT (Smart Lock Pro, Smart Lock Go, Smart Lock 4th gen / Pro 4th gen, Smart Lock 3.0 Pro), but those have not been tested yet — reports are welcome.
@@ -31,9 +30,8 @@ Your Nuki Smart Lock as a **real Matter lock in Apple Home**, straight from Home
 6. [Connect a door sensor](#6-connect-a-door-sensor)
 7. [Codes and guests](#7-codes-and-guests)
 8. [Alerts](#8-alerts)
-9. [Who opened](#9-who-opened)
-10. [Fingerprint switch → disarm the alarm](#10-fingerprint-switch--disarm-the-alarm)
-11. [Troubleshooting](#11-troubleshooting)
+9. [Fingerprint switch → disarm the alarm](#9-fingerprint-switch--disarm-the-alarm)
+10. [Troubleshooting](#10-troubleshooting)
 
 ---
 
@@ -110,15 +108,12 @@ Minutes, repeating and names are in the settings page.
 
 Don't want a notification every time the door opens or closes? Settings page → **On the lock** → untick **Show "door open / closed" in Home**. Auto-lock and the alerts keep working.
 
-## 9. Who opened
-In the settings page, under **Who opened**, link each person from the Nuki app (fingerprint) to their code in Home. A fingerprint unlock is then reported to Home as that person.
-
-## 10. Fingerprint switch → disarm the alarm
+## 9. Fingerprint switch → disarm the alarm
 The switch **Nuki Fingerprint** turns on for a second when the door is opened by fingerprint. Home app automation:
 *When Nuki Fingerprint turns on → set the Security System to Off.*
 So the alarm is disarmed only by fingerprint, never when the door is opened from inside. More switches (e.g. for codes) can be added in the settings page.
 
-## 11. Troubleshooting
+## 10. Troubleshooting
 | Problem | Fix |
 |---|---|
 | Status: "No message yet" | Check MQTT in the Nuki app (host = Homebridge IP, port 1883). |

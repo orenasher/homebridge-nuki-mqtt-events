@@ -886,7 +886,8 @@ class NukiMqttEvents {
       else if (ev && ev.trigger === 2) source = 5; // Button on the lock
       else if (ev && (ev.trigger === 3 || ev.trigger === 6)) source = 4; // Auto (Nuki timer / auto lock)
       else if (ev && ev.trigger === 0) source = 2; // Nuki app (Bluetooth)
-      const who = source === 3 ? this.codeUser(ev) : null;
+      // Apple Home drops a lock event that names a user, so it is always sent without one
+      const who = null;
       this.lastEvent = null;
       this.matter.reportOperation(action, source, who ? who.userIndex : null, who ? who.credIndex : null).catch((e) => this.log.warn(`Matter lock: could not report ${action}: ${e.message}`));
     }, known ? 0 : (this.opWaitMs ?? 600));

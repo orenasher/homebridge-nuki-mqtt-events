@@ -135,13 +135,6 @@
     <div id="nk-alerts"></div>
   </div>
 
-  <!-- people -->
-  <div class="nk-card" data-need="lock">
-    <h3><span>👤</span><span data-t="people.title"></span></h3>
-    <p class="nk-hint" data-t="people.help"></p>
-    <ul class="nk-list" id="nk-people"></ul>
-  </div>
-
   <!-- switches -->
   <div class="nk-card" data-need="switches">
     <h3><span>👆</span><span data-t="switches.title"></span></h3>
@@ -514,33 +507,6 @@
       }
     }
 
-    function renderPeople() {
-      const box = $('nk-people');
-      box.innerHTML = '';
-      if (!people) { box.innerHTML = `<li>${esc(t('people.none'))}</li>`; return; }
-      const codes = (status && status.codes) || [];
-      if (!codes.length) { box.innerHTML = `<li>${esc(t('people.noCodes'))}</li>`; }
-      const linked = (cfg.doorLock && cfg.doorLock.people) || [];
-      for (const person of people) {
-        const li = document.createElement('li');
-        const cur = linked.find((x) => Number(x.authId) === Number(person.authId));
-        const sel = document.createElement('select');
-        sel.className = 'form-control form-control-sm';
-        sel.innerHTML = `<option value="">${esc(t('people.no'))}</option>` + codes.map((c) => `<option value="${c.index}">${esc(t('people.code', { name: c.name || ('#' + c.index) }))}</option>`).join('');
-        sel.value = cur ? String(cur.homeCode) : '';
-        sel.addEventListener('change', async () => {
-          const list = linked.filter((x) => Number(x.authId) !== Number(person.authId));
-          if (sel.value) list.push({ name: person.name, authId: person.authId, homeCode: Number(sel.value) });
-          obj('doorLock').people = list;
-          await save();
-          renderPeople();
-        });
-        li.innerHTML = `<span>${esc(person.name)}${person.fingerprints ? ' 👆' : ''}</span>`;
-        li.appendChild(sel);
-        box.appendChild(li);
-      }
-    }
-
     function renderSwitches() {
       const box = $('nk-switches');
       box.innerHTML = '';
@@ -605,7 +571,6 @@
       renderNames();
       renderFeatures();
       renderAlerts();
-      renderPeople();
       renderSwitches();
       renderCustom();
       for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.getAttribute('data-t'), { door: doorName() });
@@ -619,9 +584,7 @@
       try {
         const r = await homebridge.request('/nuki-web', { token, nukiId: (status && status.nukiId) || cfg.deviceId || null });
         res.innerHTML = esc(t('web.ok', { name: r.name || '' })) + '<br>' + esc(r.canAuths ? t('web.okAuths') : t('web.noAuths'));
-        people = r.people || [];
         if (r.leftovers) res.innerHTML += '<br>' + esc(t('web.leftovers', { n: r.leftovers }));
-        renderPeople();
       } catch (e) {
         const code = e && e.error && e.error.code;
         res.textContent = code === 'badToken' ? t('web.bad') : t('web.failed', { msg: (e && e.message) || String(e) });

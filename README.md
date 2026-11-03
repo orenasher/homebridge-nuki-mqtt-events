@@ -113,7 +113,7 @@ Don't want a notification every time the door opens or closes? Settings page →
 Home does not show a name in a lock notification, so the plugin can add **one sensor per person** instead:
 1. In the Nuki app, give each person their own keypad permission (Keypad → **Add permission**) with their name and fingerprints. (Fingerprints inside one permission all count as that one person.)
 2. Settings page → **Who opened** → turn on **A sensor for each person on the keypad**, save, restart.
-3. A sensor named after each person appears in Home. Turn on its notifications. When that person opens the door, the sensor opens for a moment and Home notifies with their name.
+3. A sensor named after each person appears in Home (the list refreshes on every restart, every 10 minutes, and right away when someone new opens). Turn on its notifications. When that person opens the door, the sensor opens for a moment and Home notifies with their name.
 
 ## 10. Fingerprint switch → disarm the alarm
 The switch **Nuki Fingerprint** turns on for a second when the door is opened by fingerprint. Home app automation:

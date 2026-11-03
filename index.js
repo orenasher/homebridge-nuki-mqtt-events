@@ -95,8 +95,8 @@ class NukiMqttEvents {
       if (this.childCfg) this.startChildLock();
       if (this.lockCfg && this.lockCfg.accessCodes !== false) this.loadCodes();
       if (this.config.personSensors) {
-        setTimeout(() => this.refreshPeople(), 8000);
-        this.peopleTimer = setInterval(() => this.refreshPeople(), 6 * 3600 * 1000);
+        setTimeout(() => this.refreshPeople(), 5000); // after every restart
+        this.peopleTimer = setInterval(() => this.refreshPeople(), 10 * 60 * 1000);
       }
     });
     api.on('shutdown', () => {
@@ -215,6 +215,15 @@ class NukiMqttEvents {
         .setCharacteristic(Characteristic.Model, 'Person')
         .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-${person.authId}`);
       const svc = acc.getService(Service.ContactSensor) || acc.addService(Service.ContactSensor, person.name);
+      if (acc.context.personName && acc.context.personName !== person.name) {
+        // renamed in the Nuki app: rename the sensor too
+        svc.setCharacteristic(Characteristic.Name, person.name);
+        if (Characteristic.ConfiguredName) svc.setCharacteristic(Characteristic.ConfiguredName, person.name);
+        acc.displayName = person.name;
+        this.api.updatePlatformAccessories([acc]);
+        this.log.info(`Person sensor renamed: "${acc.context.personName}" → "${person.name}"`);
+      }
+      acc.context.personName = person.name;
       svc.getCharacteristic(Characteristic.ContactSensorState).onGet(() => (this.personState[person.authId] ? 1 : 0));
       this.personSvc[person.authId] = { svc, person };
       ids.push(id);
@@ -232,7 +241,9 @@ class NukiMqttEvents {
         .filter((a) => a.type === 13 && a.name && !ours.test(String(a.name).trim()))
         .map((a) => ({ authId: a.authId, name: String(a.name).trim() }));
       const old = this.loadPeople();
+      this.peopleAt = Date.now();
       if (JSON.stringify(old) === JSON.stringify(list)) return;
+      this.log.info(`People on the keypad: ${list.map((x) => x.name).join(', ') || '(none)'}`);
       const fs = require('fs');
       fs.mkdirSync(require('path').dirname(this.peopleFile()), { recursive: true });
       fs.writeFileSync(this.peopleFile(), JSON.stringify(list, null, 2));
@@ -255,7 +266,13 @@ class NukiMqttEvents {
   personOpened(ev) {
     if (!this.personSvc) return;
     const hit = Object.values(this.personSvc).find(({ person }) => Number(person.authId) === ev.authId || Number(person.authId) === ev.codeId);
-    if (!hit) return;
+    if (!hit) {
+      if (!ev.retried && Date.now() - (this.peopleAt || 0) > 15000) {
+        this.log.info(`Opened by a keypad person not on the list yet (authId ${ev.authId}) — refreshing the list`);
+        this.refreshPeople().then(() => this.personOpened({ ...ev, retried: true }));
+      }
+      return;
+    }
     const { svc, person } = hit;
     this.log.info(`Opened by ${person.name}`);
     const C = this.api.hap.Characteristic;

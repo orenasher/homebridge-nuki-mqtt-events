@@ -327,15 +327,20 @@ async function startMatterLock(p, o) {
     async reportOperation(action, source, userIndex = null, credIndex = null) {
       await endpoint.act((agent) => {
         const dl = agent.get(NukiDoorLockServer);
+        // A user is named the way Home created it: its index plus the fabric (Home) that made it
+        const user = userIndex ? (dl.state.users || []).find((u) => u.userIndex === userIndex) : null;
+        const withUser = !!(user && o.reportUser !== false);
+        if (userIndex && !user) p.log.info(`Matter lock: Home user ${userIndex} not found on the lock — reported without a name`);
         dl.events.lockOperation.emit({
           lockOperationType: action === 'lock' ? 0 : 1,
           operationSource: source,
-          userIndex,
-          fabricIndex: null,
+          userIndex: withUser ? userIndex : null,
+          fabricIndex: withUser ? user.creatorFabricIndex ?? null : null,
           sourceNode: null,
-          credentials: userIndex ? [{ credentialType: PIN, credentialIndex: credIndex }] : null,
+          credentials: null,
         }, agent.context);
       });
+      void credIndex;
     },
     async setBattery(bat) {
       const ps = { batChargeLevel: batLevel(bat), batChargeState: chargeState(bat) };

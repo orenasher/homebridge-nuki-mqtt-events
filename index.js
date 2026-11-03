@@ -638,7 +638,9 @@ class NukiMqttEvents {
     if (!ev) return null;
     // Fingerprint (or Nuki-app code) of a person linked in the settings to their Apple Home code
     const people = (this.lockCfg && this.lockCfg.people) || [];
-    const person = people.find((x) => x && x.authId != null && Number(x.authId) === ev.authId);
+    // Nuki Web lists the person's auth ID; the MQTT event carries it as authId (and the keypad's own ID as codeId)
+    const person = people.find((x) => x && x.authId != null && (Number(x.authId) === ev.authId || Number(x.authId) === ev.codeId));
+    if (!person && people.length && (ev.authId || ev.codeId)) this.log.info(`Keypad person authId=${ev.authId} codeId=${ev.codeId} is not linked under "Who opened"`);
     if (person && person.homeCode != null) {
       if (!this.codeMap) this.loadCodes();
       const e = this.codeMap[person.homeCode];

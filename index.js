@@ -156,6 +156,8 @@ class NukiMqttEvents {
 
     const stale = [...this.cached.values()].filter((a) => !keep.has(a.UUID));
     if (stale.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, stale);
+    for (const a of stale) this.cached.delete(a.UUID);
+    this.didSetup = true;
   }
 
   // ---------- Keypad accessory: a button (fingerprint = single press, code = double press) + battery ----------
@@ -195,10 +197,22 @@ class NukiMqttEvents {
     try { return JSON.parse(require('fs').readFileSync(this.peopleFile(), 'utf8')); } catch (e) { return []; }
   }
 
-  setupPersonSensors(list) {
+  personOff() { return new Set((this.config.peopleOff || []).map(String)); }
+
+  setupPersonSensors(all) {
     const { Service, Characteristic, uuid } = this.api.hap;
     this.personSvc = this.personSvc || {};
     this.personState = this.personState || {};
+    // Only the people ticked in the settings get a sensor; unticked ones are removed from Home
+    const off = this.personOff();
+    const list = all.filter((x) => !off.has(String(x.authId)));
+    for (const x of all) {
+      if (!off.has(String(x.authId))) continue;
+      const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:person-${x.authId}`);
+      const acc = this.cached.get(id);
+      if (acc && this.didSetup) { this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, [acc]); this.cached.delete(id); this.log.info(`Person sensor removed: "${x.name}" (unticked)`); }
+      delete this.personSvc[x.authId];
+    }
     const ids = [];
     for (const person of list) {
       const key = `person-${person.authId}`;
@@ -247,6 +261,7 @@ class NukiMqttEvents {
       for (const x of old) if (x.learned && !known.has(String(x.authId))) list.push(x);
       if (JSON.stringify(old) === JSON.stringify(list)) return;
       this.log.info(`People on the keypad: ${list.map((x) => x.name).join(', ') || '(none)'}`);
+      this.writeStatus();
       const fs = require('fs');
       fs.mkdirSync(require('path').dirname(this.peopleFile()), { recursive: true });
       fs.writeFileSync(this.peopleFile(), JSON.stringify(list, null, 2));
@@ -290,8 +305,9 @@ class NukiMqttEvents {
         } catch (e) { /* ignore */ }
         this.log.info(`New keypad person ${id} (not on Nuki Web) — added a sensor "Keypad ${id}"; rename it in the Home app`);
         this.setupPersonSensors(list);
+        this.writeStatus();
       }
-      if (!ev.created) this.personOpened({ ...ev, retried: true, created: true });
+      if (!ev.created && !this.personOff().has(String(id))) this.personOpened({ ...ev, retried: true, created: true });
       return;
     }
     const { svc, person } = hit;
@@ -648,6 +664,7 @@ class NukiMqttEvents {
           at: new Date().toISOString(), version: require('./package.json').version,
           nukiId: this.nukiId || null, lastSeen: this.lastSeen || null, nukiState: this.nukiState,
           battery: this.battery, doorOpen: this.doorOpen, matter: pairing, codes, childOn: this.childOn,
+          people: this.config.personSensors ? this.loadPeople() : [],
         };
         fs.writeFileSync(path.join(dir, 'ui-status.json'), JSON.stringify(status, null, 2));
       } catch (e) { /* the status file is only for the settings page */ }

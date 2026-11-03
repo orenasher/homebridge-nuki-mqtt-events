@@ -248,6 +248,9 @@
         'person.title': 'מי פתח — חיישן לכל אדם',
         'person.on': 'חיישן לכל אדם בקודן',
         'person.d': 'כל אדם שמוגדר בקודן של נוקי מקבל חיישן ב‑Home בשמו. כשהוא פותח (טביעת אצבע או קוד), החיישן נפתח לרגע ו‑Home שולח התראה עם השם. צריך טוקן Nuki Web.',
+        'person.pick': 'סמנו למי ליצור חיישן ב‑Home (מי שלא מסומן — החיישן שלו יוסר):',
+        'person.none': 'עוד אין אנשים ברשימה. שמרו, הפעילו מחדש, וחכו דקה (או שמישהו יפתח בטביעת אצבע).',
+        'person.learned': '(נלמד מפתיחה — שנו את השם ב‑Home)',
         'person.s1': 'בנוקי: לכל אדם הרשאה משלו בקודן (Keypad ← Add permission) עם השם וטביעות האצבע שלו.',
         'person.s2': 'שומרים ומפעילים מחדש. החיישנים נוצרים לבד (הרשימה מתעדכנת בכל הפעלה מחדש, כל 10 דקות, ומיד כשמישהו חדש פותח).',
         'person.s3': 'באפליקציית הבית: בכל חיישן ← הגדרות ← התראות ← מפעילים.',
@@ -341,6 +344,9 @@
         'person.title': 'Who opened — a sensor per person',
         'person.on': 'A sensor for each person on the keypad',
         'person.d': 'Everyone set up on the Nuki Keypad gets a sensor in Home with their name. When they open (fingerprint or code), the sensor opens for a moment and Home notifies with the name. Needs the Nuki Web token.',
+        'person.pick': 'Tick who gets a sensor in Home (unticked people have their sensor removed):',
+        'person.none': 'No people yet. Save, restart and wait a minute (or have someone open by fingerprint).',
+        'person.learned': '(learned from an unlock — rename it in Home)',
         'person.s1': 'In Nuki: give each person their own keypad permission (Keypad → Add permission) with their name and fingerprints.',
         'person.s2': 'Save and restart. The sensors are created by themselves (the list refreshes on every restart, every 10 minutes, and right away when someone new opens).',
         'person.s3': 'In the Home app: on each sensor → Settings → Notifications → turn on.',
@@ -478,7 +484,7 @@
       const l = document.createElement('label');
       l.className = 'nk-switch';
       l.htmlFor = id;
-      l.innerHTML = `<input type="checkbox" id="${id}"><span><b>${esc(t(titleKey))}</b>${descKey ? `<span class="nk-hint" style="display:block;margin:0">${esc(t(descKey))}</span>` : ''}</span>`;
+      l.innerHTML = `<input type="checkbox" id="${id}"><span><b>${titleKey ? esc(t(titleKey)) : ''}</b>${descKey ? `<span class="nk-hint" style="display:block;margin:0">${esc(t(descKey))}</span>` : ''}</span>`;
       const cb = l.querySelector('input');
       cb.checked = !!checked;
       cb.addEventListener('change', () => onChange(cb.checked));
@@ -533,7 +539,25 @@
     function renderPerson() {
       const box = $('nk-person');
       box.innerHTML = '';
-      box.appendChild(toggle('nk-person-on', !!cfg.personSensors, 'person.on', 'person.d', async (v) => { cfg.personSensors = v; await save(); }));
+      box.appendChild(toggle('nk-person-on', !!cfg.personSensors, 'person.on', 'person.d', async (v) => { cfg.personSensors = v; await save(); renderPerson(); }));
+      if (!cfg.personSensors) return;
+      const list = (status && status.people) || [];
+      const h = document.createElement('div');
+      h.className = 'nk-hint';
+      h.textContent = list.length ? t('person.pick') : t('person.none');
+      box.appendChild(h);
+      const off = new Set((cfg.peopleOff || []).map(String));
+      for (const x of list) {
+        const id = 'nk-p-' + x.authId;
+        const el = toggle(id, !off.has(String(x.authId)), null, null, async (v) => {
+          const set = new Set((cfg.peopleOff || []).map(String));
+          if (v) set.delete(String(x.authId)); else set.add(String(x.authId));
+          cfg.peopleOff = [...set].map(Number);
+          await save();
+        });
+        el.querySelector('b').textContent = x.name + (x.learned ? ' ' + t('person.learned') : '');
+        box.appendChild(el);
+      }
     }
 
     function renderSwitches() {

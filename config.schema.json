@@ -407,6 +407,13 @@
         "type": "boolean",
         "default": false,
         "description": "Each person on the Nuki Keypad gets a contact sensor in Home that opens for a moment when they unlock. Needs the Nuki Web token."
+      },
+      "peopleOff": {
+        "title": "People without a sensor (keypad IDs)",
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
       }
     }
   },
@@ -514,7 +521,8 @@
         "doorLock.unlatch",
         "doorLock.alerts",
         "doorLock.showDoorState",
-        "personSensors"
+        "personSensors",
+        "peopleOff"
       ]
     }
   ],

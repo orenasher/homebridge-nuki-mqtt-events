@@ -30,8 +30,9 @@ Your Nuki Smart Lock as a **real Matter lock in Apple Home**, straight from Home
 6. [Connect a door sensor](#6-connect-a-door-sensor)
 7. [Codes and guests](#7-codes-and-guests)
 8. [Alerts](#8-alerts)
-9. [Fingerprint switch → disarm the alarm](#9-fingerprint-switch--disarm-the-alarm)
-10. [Troubleshooting](#10-troubleshooting)
+9. [Who opened — a sensor per person](#9-who-opened--a-sensor-per-person)
+10. [Fingerprint switch → disarm the alarm](#10-fingerprint-switch--disarm-the-alarm)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -108,12 +109,18 @@ Minutes, repeating and names are in the settings page.
 
 Don't want a notification every time the door opens or closes? Settings page → **On the lock** → untick **Show "door open / closed" in Home**. Auto-lock and the alerts keep working.
 
-## 9. Fingerprint switch → disarm the alarm
+## 9. Who opened — a sensor per person
+Home does not show a name in a lock notification, so the plugin can add **one sensor per person** instead:
+1. In the Nuki app, give each person their own keypad permission (Keypad → **Add permission**) with their name and fingerprints. (Fingerprints inside one permission all count as that one person.)
+2. Settings page → **Who opened** → turn on **A sensor for each person on the keypad**, save, restart.
+3. A sensor named after each person appears in Home. Turn on its notifications. When that person opens the door, the sensor opens for a moment and Home notifies with their name.
+
+## 10. Fingerprint switch → disarm the alarm
 The switch **Nuki Fingerprint** turns on for a second when the door is opened by fingerprint. Home app automation:
 *When Nuki Fingerprint turns on → set the Security System to Off.*
 So the alarm is disarmed only by fingerprint, never when the door is opened from inside. More switches (e.g. for codes) can be added in the settings page.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 | Problem | Fix |
 |---|---|
 | Status: "No message yet" | Check MQTT in the Nuki app (host = Homebridge IP, port 1883). |

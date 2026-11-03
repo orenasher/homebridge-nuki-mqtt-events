@@ -94,11 +94,15 @@ class NukiMqttEvents {
       if (this.lockCfg) this.startLock();
       if (this.childCfg) this.startChildLock();
       if (this.lockCfg && this.lockCfg.accessCodes !== false) this.loadCodes();
+      if (this.config.personSensors) {
+        setTimeout(() => this.refreshPeople(), 8000);
+        this.peopleTimer = setInterval(() => this.refreshPeople(), 6 * 3600 * 1000);
+      }
     });
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
-      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer); clearInterval(this.peopleTimer);
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -145,6 +149,7 @@ class NukiMqttEvents {
     if (this.lockCfg) keep.add(this.setupDoorSwitch());
     if (this.keypadCfg) keep.add(this.setupKeypad());
     if (this.lockCfg) for (const id of this.setupAlerts()) keep.add(id);
+    if (this.config.personSensors) for (const id of this.setupPersonSensors(this.loadPeople())) keep.add(id);
     if (this.childCfg && this.childCfg.style !== 'matter') {
       try { keep.add(this.setupChildLock()); } catch (e) { this.log.error(`Child lock setup failed: ${e.stack || e.message}`); }
     }
@@ -180,6 +185,88 @@ class NukiMqttEvents {
     this.keypadBtn = btn;
     this.keypadBat = bat;
     return id;
+  }
+
+  // ---------- A sensor per person: opens for a moment when that person unlocks (Home notifies with the name) ----------
+
+  peopleFile() { return require('path').join(this.api.user.storagePath(), 'nuki-matter-lock', 'people.json'); }
+
+  loadPeople() {
+    try { return JSON.parse(require('fs').readFileSync(this.peopleFile(), 'utf8')); } catch (e) { return []; }
+  }
+
+  setupPersonSensors(list) {
+    const { Service, Characteristic, uuid } = this.api.hap;
+    this.personSvc = this.personSvc || {};
+    this.personState = this.personState || {};
+    const ids = [];
+    for (const person of list) {
+      const key = `person-${person.authId}`;
+      const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:${key}`);
+      let acc = this.cached.get(id);
+      if (!acc) {
+        acc = new this.api.platformAccessory(person.name, id);
+        this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
+        this.cached.set(id, acc);
+        this.log.info(`Person sensor added: "${person.name}"`);
+      }
+      acc.getService(Service.AccessoryInformation)
+        .setCharacteristic(Characteristic.Manufacturer, 'Nuki')
+        .setCharacteristic(Characteristic.Model, 'Person')
+        .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-${person.authId}`);
+      const svc = acc.getService(Service.ContactSensor) || acc.addService(Service.ContactSensor, person.name);
+      svc.getCharacteristic(Characteristic.ContactSensorState).onGet(() => (this.personState[person.authId] ? 1 : 0));
+      this.personSvc[person.authId] = { svc, person };
+      ids.push(id);
+    }
+    return ids;
+  }
+
+  // People on the Nuki Keypad (Nuki Web), without the codes this plugin made from Home
+  async refreshPeople() {
+    const web = this.web();
+    if (!web) { this.log.warn('Person sensors need the Nuki Web token'); return; }
+    try {
+      const ours = /^(Apple Home|Home)( \d+)?$/;
+      const list = (await web.listAuths())
+        .filter((a) => a.type === 13 && a.name && !ours.test(String(a.name).trim()))
+        .map((a) => ({ authId: a.authId, name: String(a.name).trim() }));
+      const old = this.loadPeople();
+      if (JSON.stringify(old) === JSON.stringify(list)) return;
+      const fs = require('fs');
+      fs.mkdirSync(require('path').dirname(this.peopleFile()), { recursive: true });
+      fs.writeFileSync(this.peopleFile(), JSON.stringify(list, null, 2));
+      this.setupPersonSensors(list);
+      const keepIds = new Set(list.map((x) => String(x.authId)));
+      const { uuid } = this.api.hap;
+      const gone = old.filter((x) => !keepIds.has(String(x.authId)));
+      for (const x of gone) {
+        const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:person-${x.authId}`);
+        const acc = this.cached.get(id);
+        if (acc) { this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, [acc]); this.cached.delete(id); }
+        delete this.personSvc[x.authId];
+        this.log.info(`Person sensor removed: "${x.name}"`);
+      }
+    } catch (e) {
+      this.log.warn(`Person sensors: ${e.message}`);
+    }
+  }
+
+  personOpened(ev) {
+    if (!this.personSvc) return;
+    const hit = Object.values(this.personSvc).find(({ person }) => Number(person.authId) === ev.authId || Number(person.authId) === ev.codeId);
+    if (!hit) return;
+    const { svc, person } = hit;
+    this.log.info(`Opened by ${person.name}`);
+    const C = this.api.hap.Characteristic;
+    this.personState[person.authId] = true;
+    svc.updateCharacteristic(C.ContactSensorState, 1);
+    clearTimeout(this.personTimers && this.personTimers[person.authId]);
+    this.personTimers = this.personTimers || {};
+    this.personTimers[person.authId] = setTimeout(() => {
+      this.personState[person.authId] = false;
+      svc.updateCharacteristic(C.ContactSensorState, 0);
+    }, this.personPulseMs ?? 5000);
   }
 
   // ---------- Door alerts: forced open, left open (repeats while open) ----------
@@ -1029,6 +1116,7 @@ class NukiMqttEvents {
     if (this.config.logEvents !== false) {
       this.log.info(`Event "${payload}" → action=${action} trigger=${trigger} authId=${authId} codeId=${codeId} extra=${extra}`);
     }
+    if (this.config.personSensors && [1, 3, 5].includes(action) && (authId || codeId)) this.personOpened({ authId, codeId });
     // Keypad actions (code / fingerprint) carry a non-zero code ID
     const fromKeypad = codeId > 0;
     if (!fromKeypad) return;

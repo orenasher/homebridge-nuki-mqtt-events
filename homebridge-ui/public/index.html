@@ -135,6 +135,17 @@
     <div id="nk-alerts"></div>
   </div>
 
+  <!-- person sensors -->
+  <div class="nk-card" id="nk-person-card">
+    <h3><span>👤</span><span data-t="person.title"></span></h3>
+    <div id="nk-person"></div>
+    <ol class="nk-steps">
+      <li data-t="person.s1"></li>
+      <li data-t="person.s2"></li>
+      <li data-t="person.s3"></li>
+    </ol>
+  </div>
+
   <!-- switches -->
   <div class="nk-card" data-need="switches">
     <h3><span>👆</span><span data-t="switches.title"></span></h3>
@@ -234,6 +245,12 @@
         'people.no': '— לא מחובר —',
         'people.code': 'קוד ב‑Home: {name}',
         'people.noCodes': 'עוד אין קודים ב‑Home. הוסיפו קוד בכרטיס המנעול ← ניהול גישה.',
+        'person.title': 'מי פתח — חיישן לכל אדם',
+        'person.on': 'חיישן לכל אדם בקודן',
+        'person.d': 'כל אדם שמוגדר בקודן של נוקי מקבל חיישן ב‑Home בשמו. כשהוא פותח (טביעת אצבע או קוד), החיישן נפתח לרגע ו‑Home שולח התראה עם השם. צריך טוקן Nuki Web.',
+        'person.s1': 'בנוקי: לכל אדם הרשאה משלו בקודן (Keypad ← Add permission) עם השם וטביעות האצבע שלו.',
+        'person.s2': 'שומרים ומפעילים מחדש. החיישנים נוצרים לבד (רשימת האנשים מתעדכנת גם כל 6 שעות).',
+        'person.s3': 'באפליקציית הבית: בכל חיישן ← הגדרות ← התראות ← מפעילים.',
         'switches.title': 'מתגים לאוטומציות',
         'switches.help': 'מתג שנדלק לרגע כשפותחים בדרך שבחרתם — לשימוש באוטומציה (למשל לנטרל אזעקה).',
         'switches.name': 'שם',
@@ -321,6 +338,12 @@
         'people.no': '— not linked —',
         'people.code': 'Home code: {name}',
         'people.noCodes': 'No codes in Home yet. Add one on the lock → Manage Access.',
+        'person.title': 'Who opened — a sensor per person',
+        'person.on': 'A sensor for each person on the keypad',
+        'person.d': 'Everyone set up on the Nuki Keypad gets a sensor in Home with their name. When they open (fingerprint or code), the sensor opens for a moment and Home notifies with the name. Needs the Nuki Web token.',
+        'person.s1': 'In Nuki: give each person their own keypad permission (Keypad → Add permission) with their name and fingerprints.',
+        'person.s2': 'Save and restart. The sensors are created by themselves (the list of people also refreshes every 6 hours).',
+        'person.s3': 'In the Home app: on each sensor → Settings → Notifications → turn on.',
         'switches.title': 'Switches for automations',
         'switches.help': 'A switch that turns on for a moment when the door is opened the way you choose — use it in an automation (e.g. disarm an alarm).',
         'switches.name': 'Name',
@@ -507,6 +530,12 @@
       }
     }
 
+    function renderPerson() {
+      const box = $('nk-person');
+      box.innerHTML = '';
+      box.appendChild(toggle('nk-person-on', !!cfg.personSensors, 'person.on', 'person.d', async (v) => { cfg.personSensors = v; await save(); }));
+    }
+
     function renderSwitches() {
       const box = $('nk-switches');
       box.innerHTML = '';
@@ -571,6 +600,7 @@
       renderNames();
       renderFeatures();
       renderAlerts();
+      renderPerson();
       renderSwitches();
       renderCustom();
       for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.getAttribute('data-t'), { door: doorName() });

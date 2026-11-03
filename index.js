@@ -707,7 +707,7 @@ class NukiMqttEvents {
     if (!changed) return;
     this.log.info(`Door ${open ? 'opened' : 'closed'} (${why})`);
     this.doorAlerts(open);
-    if (this.matter) this.matter.setDoorOpen(open).catch((e) => this.log.warn(`Matter lock: could not update door state: ${e.message}`));
+    if (this.matter && this.lockCfg.showDoorState !== false) this.matter.setDoorOpen(open).catch((e) => this.log.warn(`Matter lock: could not update door state: ${e.message}`));
     if (open) {
       if (this.relockTimer) this.log.info('Door opened — auto-lock paused until it closes');
       clearTimeout(this.relockTimer);
@@ -782,7 +782,7 @@ class NukiMqttEvents {
         name: c.name || 'Front Door',
         serial: String(this.config.deviceId || 'nuki-lock'),
         lockState: this.nukiState !== null ? NUKI_TO_MATTER[this.nukiState] : undefined,
-        doorOpen: this.doorOpen,
+        doorOpen: c.showDoorState === false ? false : this.doorOpen,
         battery: this.battery,
         childLock: opts.childLock,
         accessCodes: opts.accessCodes !== false && c.accessCodes !== false,

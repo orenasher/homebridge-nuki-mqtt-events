@@ -223,6 +223,7 @@
         'door.s3': 'זהו. מעכשיו הנעילה האוטומטית מחכה שהדלת תיסגר, וההתראות יודעות מתי היא פתוחה.',
         'features.title': 'במנעול',
         'f.unlatch': 'כפתור "פתיחת דלת"', 'f.unlatch.d': 'ב‑Home יופיע גם "פתיחה" שמושכת את הלשונית. (שינוי מחייב צימוד מחדש)',
+        'f.door': 'הצגת "דלת פתוחה / סגורה" ב‑Home', 'f.door.d': 'כבוי = אין התראות על פתיחה וסגירה של הדלת. הנעילה האוטומטית וההתראות ממשיכות לעבוד.',
         'f.codes': 'קודים מ‑Home לקודן', 'f.codes.d': 'קוד שמוסיפים ב‑Home נכנס לקודן של נוקי, עם הגבלת ימים ושעות לאורחים. קודן: 6 ספרות 1–9, לא מתחיל ב‑12.',
         'f.child': 'נעילת ילדים', 'f.child.d': 'מנטרלת את הכפתור הפיזי במנעול. צריך טוקן Nuki Web.',
         'f.relock': 'נעילה אוטומטית — הזמן נקבע באפליקציית הבית (בכרטיס המנעול).',
@@ -309,6 +310,7 @@
         'door.s3': 'Done. Auto-lock now waits for the door to close, and the alerts know when it is open.',
         'features.title': 'On the lock',
         'f.unlatch': '"Unlatch" button', 'f.unlatch.d': 'Home also shows "Unlatch", which pulls the latch. (Changing this needs a re-pair)',
+        'f.door': 'Show "door open / closed" in Home', 'f.door.d': 'Off = no notifications when the door opens or closes. Auto-lock and the alerts keep working.',
         'f.codes': 'Codes from Home on the keypad', 'f.codes.d': 'A code added in Home goes onto the Nuki Keypad, with day/hour limits for guests. Keypad: 6 digits 1–9, not starting with 12.',
         'f.child': 'Child lock', 'f.child.d': 'Turns off the physical button on the lock. Needs the Nuki Web token.',
         'f.relock': 'Auto-lock — the time is set in the Home app (on the lock).',
@@ -486,6 +488,7 @@
       box.innerHTML = '';
       const d = cfg.doorLock || {};
       box.appendChild(toggle('nk-f-unlatch', d.unlatch !== false, 'f.unlatch', 'f.unlatch.d', async (v) => { obj('doorLock').unlatch = v; await save(); }));
+      box.appendChild(toggle('nk-f-door', d.showDoorState !== false, 'f.door', 'f.door.d', async (v) => { obj('doorLock').showDoorState = v; await save(); }));
       box.appendChild(toggle('nk-f-codes', d.accessCodes !== false, 'f.codes', 'f.codes.d', async (v) => { obj('doorLock').accessCodes = v; await save(); }));
       if (preset() === 'custom') box.appendChild(toggle('nk-f-child', cfg.childLock && cfg.childLock.enabled, 'f.child', 'f.child.d', async (v) => { obj('childLock').enabled = v; cfg.childLock.style = cfg.childLock.style || 'matter'; await save(); }));
       const p = document.createElement('p');

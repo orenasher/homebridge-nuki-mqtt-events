@@ -396,6 +396,12 @@
                 }
               }
             }
+          },
+          "showDoorState": {
+            "title": "Show door open / closed on the lock in Home",
+            "type": "boolean",
+            "default": true,
+            "description": "Off = Home gets no door open/closed changes (no notifications). Auto-lock and alerts keep working."
           }
         }
       },
@@ -522,7 +528,8 @@
         "uiLanguage",
         "doorLock.unlatch",
         "doorLock.alerts",
-        "doorLock.people"
+        "doorLock.people",
+        "doorLock.showDoorState"
       ]
     }
   ],

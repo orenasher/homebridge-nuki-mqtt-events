@@ -108,6 +108,8 @@ Two sensors are added to Home (turn on their notifications in the Home app):
 
 Minutes, repeating and names are in the settings page.
 
+Don't want a notification every time the door opens or closes? Settings page → **On the lock** → untick **Show "door open / closed" in Home**. Auto-lock and the alerts keep working.
+
 ## 9. Who opened
 In the settings page, under **Who opened**, link each person from the Nuki app (fingerprint) to their code in Home. A fingerprint unlock is then reported to Home as that person.
 

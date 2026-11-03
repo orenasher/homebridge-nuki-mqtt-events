@@ -351,6 +351,15 @@ class NukiMqttEvents {
       .setCharacteristic(Characteristic.Model, model)
       .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-${key}`);
     const svc = acc.getService(Service.ContactSensor) || acc.addService(Service.ContactSensor, name);
+    if (acc.context.sensorName !== name && (acc.context.sensorName || acc.displayName !== name)) {
+      // the name was changed in the settings: rename the sensor in Home
+      svc.setCharacteristic(Characteristic.Name, name);
+      if (Characteristic.ConfiguredName) svc.setCharacteristic(Characteristic.ConfiguredName, name);
+      acc.displayName = name;
+      this.api.updatePlatformAccessories([acc]);
+      this.log.info(`Sensor renamed: "${acc.context.sensorName || model}" → "${name}"`);
+    }
+    acc.context.sensorName = name;
     svc.getCharacteristic(Characteristic.ContactSensorState).onGet(() => (this.alertState[key] ? 1 : 0));
     this.alertSvc[key] = svc;
     return id;

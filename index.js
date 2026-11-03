@@ -345,6 +345,7 @@ class NukiMqttEvents {
     if (!acc) {
       acc = new this.api.platformAccessory(name, id);
       this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
+      this.cached.set(id, acc);
     }
     acc.getService(Service.AccessoryInformation)
       .setCharacteristic(Characteristic.Manufacturer, 'Nuki')

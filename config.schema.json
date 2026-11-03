@@ -414,6 +414,13 @@
         "items": {
           "type": "integer"
         }
+      },
+      "peopleNames": {
+        "title": "Person sensor names in Apple Home (by keypad ID)",
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
       }
     }
   },

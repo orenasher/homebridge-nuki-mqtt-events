@@ -250,7 +250,9 @@
         'person.d': 'כל אדם שמוגדר בקודן של נוקי מקבל חיישן ב‑Home בשמו. כשהוא פותח (טביעת אצבע או קוד), החיישן נפתח לרגע ו‑Home שולח התראה עם השם. צריך טוקן Nuki Web.',
         'person.pick': 'סמנו למי ליצור חיישן ב‑Home (מי שלא מסומן — החיישן שלו יוסר):',
         'person.none': 'עוד אין אנשים ברשימה. שמרו, הפעילו מחדש, וחכו דקה (או שמישהו יפתח בטביעת אצבע).',
-        'person.learned': '(נלמד מפתיחה — שנו את השם ב‑Home)',
+        'person.learned': '(נלמד מפתיחה)',
+        'person.orig': 'בנוקי: {name}',
+        'person.homeName': 'שם ב‑Apple Home (ריק = השם מנוקי)',
         'person.s1': 'בנוקי: לכל אדם הרשאה משלו בקודן (Keypad ← Add permission) עם השם וטביעות האצבע שלו.',
         'person.s2': 'שומרים ומפעילים מחדש. החיישנים נוצרים לבד (הרשימה מתעדכנת בכל הפעלה מחדש, כל 10 דקות, ומיד כשמישהו חדש פותח).',
         'person.s3': 'באפליקציית הבית: בכל חיישן ← הגדרות ← התראות ← מפעילים.',
@@ -346,7 +348,9 @@
         'person.d': 'Everyone set up on the Nuki Keypad gets a sensor in Home with their name. When they open (fingerprint or code), the sensor opens for a moment and Home notifies with the name. Needs the Nuki Web token.',
         'person.pick': 'Tick who gets a sensor in Home (unticked people have their sensor removed):',
         'person.none': 'No people yet. Save, restart and wait a minute (or have someone open by fingerprint).',
-        'person.learned': '(learned from an unlock — rename it in Home)',
+        'person.learned': '(learned from an unlock)',
+        'person.orig': 'In Nuki: {name}',
+        'person.homeName': 'Name in Apple Home (empty = the name from Nuki)',
         'person.s1': 'In Nuki: give each person their own keypad permission (Keypad → Add permission) with their name and fingerprints.',
         'person.s2': 'Save and restart. The sensors are created by themselves (the list refreshes on every restart, every 10 minutes, and right away when someone new opens).',
         'person.s3': 'In the Home app: on each sensor → Settings → Notifications → turn on.',
@@ -555,8 +559,24 @@
           cfg.peopleOff = [...set].map(Number);
           await save();
         });
-        el.querySelector('b').textContent = x.name + (x.learned ? ' ' + t('person.learned') : '');
+        el.querySelector('b').textContent = t('person.orig', { name: x.name }) + (x.learned ? ' ' + t('person.learned') : '');
         box.appendChild(el);
+        // Name in Apple Home (empty = the name from Nuki)
+        const nm = input('nk-pn-' + x.authId, (cfg.peopleNames || {})[x.authId], x.name, async (v) => {
+          cfg.peopleNames = { ...(cfg.peopleNames || {}) };
+          if (v) cfg.peopleNames[x.authId] = v; else delete cfg.peopleNames[x.authId];
+          await save();
+        });
+        nm.style.margin = '0 2rem 0.9rem';
+        nm.style.maxWidth = '18rem';
+        nm.setAttribute('aria-label', t('person.homeName'));
+        nm.title = t('person.homeName');
+        const lbl = document.createElement('div');
+        lbl.className = 'nk-hint';
+        lbl.style.margin = '0 2rem 0.2rem';
+        lbl.textContent = t('person.homeName');
+        box.appendChild(lbl);
+        box.appendChild(nm);
       }
     }
 

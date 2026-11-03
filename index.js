@@ -214,32 +214,34 @@ class NukiMqttEvents {
       delete this.personSvc[x.authId];
     }
     const ids = [];
+    const names = this.config.peopleNames || {};
     for (const person of list) {
       const key = `person-${person.authId}`;
       const id = uuid.generate(`${PLATFORM}:${this.deviceKey}:${key}`);
+      // The name chosen in the settings page wins over the name from Nuki
+      const name = String(names[person.authId] || person.name).trim() || person.name;
       let acc = this.cached.get(id);
       if (!acc) {
-        acc = new this.api.platformAccessory(person.name, id);
+        acc = new this.api.platformAccessory(name, id);
         this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [acc]);
         this.cached.set(id, acc);
-        this.log.info(`Person sensor added: "${person.name}"`);
+        this.log.info(`Person sensor added: "${name}"`);
       }
       acc.getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, 'Nuki')
         .setCharacteristic(Characteristic.Model, 'Person')
         .setCharacteristic(Characteristic.SerialNumber, `${this.deviceKey}-${person.authId}`);
-      const svc = acc.getService(Service.ContactSensor) || acc.addService(Service.ContactSensor, person.name);
-      if (acc.context.personName && acc.context.personName !== person.name) {
-        // renamed in the Nuki app: rename the sensor too
-        svc.setCharacteristic(Characteristic.Name, person.name);
-        if (Characteristic.ConfiguredName) svc.setCharacteristic(Characteristic.ConfiguredName, person.name);
-        acc.displayName = person.name;
+      const svc = acc.getService(Service.ContactSensor) || acc.addService(Service.ContactSensor, name);
+      if (acc.context.personName && acc.context.personName !== name) {
+        svc.setCharacteristic(Characteristic.Name, name);
+        if (Characteristic.ConfiguredName) svc.setCharacteristic(Characteristic.ConfiguredName, name);
+        acc.displayName = name;
         this.api.updatePlatformAccessories([acc]);
-        this.log.info(`Person sensor renamed: "${acc.context.personName}" → "${person.name}"`);
+        this.log.info(`Person sensor renamed: "${acc.context.personName}" → "${name}"`);
       }
-      acc.context.personName = person.name;
+      acc.context.personName = name;
       svc.getCharacteristic(Characteristic.ContactSensorState).onGet(() => (this.personState[person.authId] ? 1 : 0));
-      this.personSvc[person.authId] = { svc, person };
+      this.personSvc[person.authId] = { svc, person: { ...person, name } };
       ids.push(id);
     }
     return ids;

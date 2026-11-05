@@ -102,7 +102,7 @@ Codes you add directly in the Nuki app are not touched by the plugin.
 
 ## 8. Alerts
 Two sensors are added to Home (turn on their notifications in the Home app):
-- **Door Forced Open** — opens when the door is opened while the lock is locked.
+- **Door Forced Open** — opens when the door is opened while the lock is locked. It waits 10 seconds for the lock's own report first (the Nuki's message can come a few seconds after the door sensor), so a normal opening from inside does not set it off.
 - **Door Left Open** — opens after the door has been open 5 minutes, and again every 5 minutes while it stays open.
 
 Minutes, repeating and names are in the settings page.

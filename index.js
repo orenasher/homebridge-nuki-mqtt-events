@@ -382,7 +382,14 @@ class NukiMqttEvents {
   }
 
   // Remember when someone used the lock, so a door opened right after an unlock is not "forced"
-  touchLock() { this.lockActivityAt = Date.now(); }
+  touchLock() {
+    this.lockActivityAt = Date.now();
+    // An unlock reported late (the Nuki's message can lag behind the door sensor): it was not a forced entry
+    if (this.alertState && this.alertState['forced-open'] && Date.now() - (this.forcedAt || 0) < 60000) {
+      this.log.info('Lock activity right after the forced-open alert — it was a normal opening, alert cleared');
+      this.setAlert('forced-open', false);
+    }
+  }
 
   doorAlerts(open) {
     if (!this.alertState) return;
@@ -409,9 +416,10 @@ class NukiMqttEvents {
           : openedAt - (this.startedAt || 0) > settle * 4;
         if (!fresh) { this.log.info('Door opened while the lock state is not current (Nuki not connected yet) — no forced-open alert'); return; }
         this.log.warn('ALERT: the door was opened while the lock is locked (forced open)');
+        this.forcedAt = Date.now();
         this.setAlert('forced-open', true);
         if (this.matter && this.matter.reportAlarm) this.matter.reportAlarm(6).catch(() => {});
-      }, this.forcedCheckMs ?? 3000);
+      }, this.forcedCheckMs ?? 10000);
     }
     this.doorOpenedAt = openedAt;
     if (c.leftMin > 0) {

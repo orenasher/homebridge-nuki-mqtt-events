@@ -126,7 +126,6 @@
             "name": {
               "title": "Switch name",
               "type": "string",
-              "required": true,
               "default": "Nuki Fingerprint"
             },
             "sources": {
@@ -172,7 +171,10 @@
               },
               "description": "Leave empty for everyone. Code IDs appear in the Homebridge log."
             }
-          }
+          },
+          "required": [
+            "name"
+          ]
         },
         "description": "Each switch turns on for a moment when the lock is opened this way. Use it in a Home automation (e.g. disarm the alarm)."
       },

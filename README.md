@@ -1,3 +1,5 @@
+<p align="center"><img src="icon-512.png" width="120" alt=""></p>
+
 # Nuki for Apple Home — homebridge-nuki-mqtt-events
 
 **[עברית — לחצו כאן](README.he.md)**

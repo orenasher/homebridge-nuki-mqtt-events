@@ -1,3 +1,5 @@
+<p align="center"><img src="icon-512.png" width="120" alt=""></p>
+
 <div dir="rtl">
 
 # נוקי ל‑Apple Home — homebridge-nuki-mqtt-events

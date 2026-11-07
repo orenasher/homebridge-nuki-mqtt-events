@@ -253,9 +253,16 @@ class NukiMqttEvents {
     if (!web) { this.log.warn('Person sensors need the Nuki Web token'); return; }
     try {
       const ours = /^(Apple Home|Home)( \d+)?$/;
-      const list = (await web.listAuths())
+      const auths = await web.listAuths();
+      // Keypad people (code / fingerprint) and Nuki-app users (phones) — not Nuki Web itself or the codes this plugin made
+      const list = auths
         .filter((a) => a.type === 13 && a.name && !ours.test(String(a.name).trim()))
         .map((a) => ({ authId: a.authId, name: String(a.name).trim() }));
+      for (const a of auths) {
+        if (a.type !== 0 || !a.name || /^Nuki Web$/i.test(String(a.name).trim())) continue;
+        if (list.some((x) => String(x.authId) === String(a.authId))) continue;
+        list.push({ authId: a.authId, name: `${String(a.name).trim()} (app)`, app: true });
+      }
       const old = this.loadPeople();
       this.peopleAt = Date.now();
       // People the plugin learned from who actually opened stay, unless Nuki Web now knows them (then its name is used)
@@ -299,13 +306,13 @@ class NukiMqttEvents {
       if (!id) return;
       const list = this.loadPeople();
       if (!list.some((x) => String(x.authId) === String(id))) {
-        list.push({ authId: id, name: `Keypad ${id}`, learned: true });
+        list.push({ authId: id, name: ev.codeId > 0 ? `Keypad ${id}` : `Nuki app ${id}`, learned: true });
         try {
           const fs = require('fs');
           fs.mkdirSync(require('path').dirname(this.peopleFile()), { recursive: true });
           fs.writeFileSync(this.peopleFile(), JSON.stringify(list, null, 2));
         } catch (e) { /* ignore */ }
-        this.log.info(`New keypad person ${id} (not on Nuki Web) — added a sensor "Keypad ${id}"; rename it in the Home app`);
+        this.log.info(`New person ${id} (not on Nuki Web) — added a sensor; rename it in the settings page`);
         this.setupPersonSensors(list);
         this.writeStatus();
       }

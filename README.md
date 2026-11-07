@@ -114,7 +114,7 @@ Don't want a notification every time the door opens or closes? Settings page →
 ## 9. Who opened — a sensor per person
 Home does not show a name in a lock notification, so the plugin can add **one sensor per person** instead:
 1. In the Nuki app, give each person their own keypad permission (Keypad → **Add permission**) with their name and fingerprints. (Fingerprints inside one permission all count as that one person.)
-2. Settings page → **Who opened** → turn on **A sensor for each person on the keypad**, save, restart. The page then lists everyone the plugin knows — tick who gets a sensor in Home (unticked people have their sensor removed), and type the name each sensor should have in Apple Home — the name from Nuki is shown next to it.
+2. Settings page → **Who opened** → turn on **A sensor for each person on the keypad**, save, restart. The page then lists everyone the plugin knows — tick who gets a sensor in Home (unticked people have their sensor removed), and type the name each sensor should have in Apple Home — the name from Nuki is shown next to it. People who open with the Nuki app on their phone show up as "<name> (app)".
 3. A sensor named after each person appears in Home (the list refreshes on every restart, every 10 minutes, and right away when someone new opens). Turn on its notifications. When that person opens the door, the sensor opens for a moment and Home notifies with their name.
 
 The names come from Nuki Web. If Nuki Web does not know someone yet (the Nuki app must be logged in to your Nuki account so changes reach Nuki Web), the plugin still makes a sensor the first time that person opens, named "Keypad 8194" or similar — rename it in the Home app.

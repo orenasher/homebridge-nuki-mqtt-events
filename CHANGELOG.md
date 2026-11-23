@@ -2,6 +2,14 @@
 
 Every version in English and in Hebrew. The settings page of the plugin shows the latest ones under **What's new**.
 
+## 1.17.1
+
+### English
+- New versions are now published to npm straight from GitHub (verified, with provenance). Nothing changes in the plugin itself.
+
+### עברית
+- גרסאות חדשות מתפרסמות עכשיו ל‑npm ישירות מ‑GitHub (מאומת, עם מקור מוצהר). בפלאגין עצמו לא השתנה כלום.
+
 ## 1.17.0
 
 ### English

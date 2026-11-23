@@ -2,7 +2,7 @@
 
 # Nuki for Apple Home — homebridge-nuki-mqtt-events
 
-**[עברית — לחצו כאן](README.he.md)**
+**[עברית — לחצו כאן](README.he.md)** · **[What's new](CHANGELOG.md)**
 
 Your Nuki Smart Lock as a **real Matter lock in Apple Home**, straight from Homebridge, with no Home Assistant, Mosquitto or extra bridge. The lock talks to the plugin over its built-in **MQTT**.
 
@@ -17,6 +17,8 @@ Your Nuki Smart Lock as a **real Matter lock in Apple Home**, straight from Home
 | 🔋 **Battery** | Battery level and charging state; low-battery warning for the keypad. |
 | 🔔 **Notifications** | "Locked / Unlocked" also when the lock is used from the Nuki app, keypad, fingerprint or button. Jammed lock. |
 | 🚨 **Door alerts** | **Forced entry** (door opened while locked) and **door left open** (after 5 minutes, repeating while it stays open). |
+| 📱 **Keypad moved** | Strong alert when the Keypad 2 NFC is moved or pulled off (with Nuki's theft-detection battery cover). |
+| 🕒 **Activity history** | The last 20 actions in the settings page: who, what, when and how. |
 | 👆 **Fingerprint switch** | A switch for automations, e.g. open by fingerprint → disarm the alarm. |
 
 **Tested on the Nuki Smart Lock Ultra.** It should work with every Nuki that has built-in MQTT (Smart Lock Pro, Smart Lock Go, Smart Lock 4th gen / Pro 4th gen, Smart Lock 3.0 Pro), but those have not been tested yet — reports are welcome.
@@ -103,11 +105,17 @@ In the lock's page in Home → **Manage Access**: add your code, or a guest with
 Codes you add directly in the Nuki app are not touched by the plugin.
 
 ## 8. Alerts
-Two sensors are added to Home (turn on their notifications in the Home app):
+Three sensors are added to Home (turn on their notifications in the Home app):
 - **Door Forced Open** — opens when the door is opened while the lock is locked. It waits 10 seconds for the lock's own report first (the Nuki's message can come a few seconds after the door sensor), so a normal opening from inside does not set it off.
 - **Door Left Open** — opens after the door has been open 5 minutes, and again every 5 minutes while it stays open.
+- **Keypad Moved** — for the Keypad 2 NFC with Nuki's theft-detection battery cover (sold separately; turn on Theft detection for the keypad in the Nuki app). When the keypad is moved or pulled off, the sensor opens for 5 minutes and the lock in Home reports tampering. The plugin reads it from the Nuki activity log (checked every minute, needs the Nuki Web token), so the alert can come up to a minute or two after the keypad was moved.
 
 Minutes, repeating and names are in the settings page.
+
+**Test the alerts:** settings page → **Alerts** → the **Test** buttons. A real notification goes to Home and the sensor clears after 15 seconds. Do this once to make sure the notifications reach your phone.
+
+### Activity history
+With the Nuki Web token, the settings page shows the last 20 actions from the Nuki activity log: when, what (unlock, lock, unlatch, door opened…), who and how (fingerprint, code, Nuki app, Home, button). Wrong keypad codes are marked with ⚠️.
 
 Don't want a notification every time the door opens or closes? Settings page → **On the lock** → untick **Show "door open / closed" in Home**. Auto-lock and the alerts keep working.
 

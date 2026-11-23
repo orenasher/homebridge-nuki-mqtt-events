@@ -1,17 +1,33 @@
-name: Publish to npm
+name: Publish
 on:
   push:
     tags: ['v*']
-permissions:
-  id-token: write
-  contents: read
 jobs:
-  publish:
+  npm:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
-      - run: npm publish
+      # Skips quietly when this version is already on npm (published from the Pi)
+      - run: npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version || npm publish
+  release:
+    # GitHub release with this version's notes from CHANGELOG.md — Homebridge UI shows them when updating
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release notes
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## /{p=($2==v)} p' CHANGELOG.md | tail -n +2 > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md

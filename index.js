@@ -65,6 +65,9 @@ function applyPreset(cfg, log) {
   return c;
 }
 
+// Nuki activity log actions we know (Nuki Web API); anything else is new — e.g. the Keypad 2 NFC theft detection
+const KNOWN_LOG_ACTIONS = new Set([1, 2, 3, 4, 5, 6, 7, 208, 209, 224, 225, 226, 240, 241, 242, 243, 250, 251, 252, 253, 254, 255]);
+
 class NukiMqttEvents {
   constructor(log, config, api) {
     this.log = log;
@@ -98,11 +101,18 @@ class NukiMqttEvents {
         setTimeout(() => this.refreshPeople(), 5000); // after every restart
         this.peopleTimer = setInterval(() => this.refreshPeople(), 10 * 60 * 1000);
       }
+      // Activity history for the settings page + "keypad moved" from the Nuki activity log
+      if (this.config.activityLog !== false && this.web()) {
+        setTimeout(() => this.pollActivity(), 8000);
+        this.activityTimer = setInterval(() => this.pollActivity(), (Number(this.config.activityPollSeconds) || 60) * 1000);
+      }
+      this.watchTests();
     });
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
-      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer); clearInterval(this.peopleTimer);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer); clearInterval(this.peopleTimer); clearInterval(this.activityTimer); clearTimeout(this.theftTimer);
+      try { require('fs').unwatchFile(this.testFile()); } catch (e) { /* not watched */ }
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
       if (this.matter) this.matter.close().catch(() => {});
@@ -342,6 +352,9 @@ class NukiMqttEvents {
       leftMin: a.leftOpenMinutes === undefined || a.leftOpenMinutes === null || a.leftOpenMinutes === '' ? 5 : Number(a.leftOpenMinutes) || 0,
       repeatMin: a.repeat === false ? 0 : Number(a.repeatMinutes) || Number(a.leftOpenMinutes) || 5,
       leftName: a.leftOpenName || 'Door Left Open',
+      theft: a.keypadMoved !== false,
+      theftName: a.keypadMovedName || 'Keypad Moved',
+      theftMin: Number(a.keypadMovedMinutes) || 5,
     };
   }
 
@@ -379,6 +392,7 @@ class NukiMqttEvents {
     this.alertSvc = {};
     if (c.forced) ids.push(this.sensorAcc('forced-open', c.forcedName, 'Door Forced Open'));
     if (c.leftMin > 0) ids.push(this.sensorAcc('left-open', c.leftName, 'Door Left Open'));
+    if (c.theft) ids.push(this.sensorAcc('keypad-moved', c.theftName, 'Keypad Moved'));
     return ids;
   }
 
@@ -442,6 +456,81 @@ class NukiMqttEvents {
       };
       this.leftTimer = setTimeout(fire, c.leftMin * unit);
     }
+  }
+
+  // ---------- Keypad moved (Keypad 2 NFC theft detection) ----------
+
+  // Strong alert: the "Keypad Moved" sensor opens and the lock in Home reports a tamper alarm
+  keypadMoved(why, test) {
+    if (!this.alertSvc || !this.alertSvc['keypad-moved']) { this.log.warn(`Keypad moved (${why}) — turn on the "Keypad moved" alert in the settings to get it in Home`); return; }
+    const c = this.alertCfg();
+    this.log.warn(`ALERT${test ? ' (TEST)' : ''}: the keypad was moved or removed (${why})`);
+    clearTimeout(this.theftTimer);
+    const fire = () => {
+      this.setAlert('keypad-moved', true);
+      // DoorLockAlarm 5 = front escutcheon removed (tamper)
+      if (this.matter && this.matter.reportAlarm) this.matter.reportAlarm(5).catch(() => {});
+      this.theftTimer = setTimeout(() => this.setAlert('keypad-moved', false), test ? 15000 : c.theftMin * 60000);
+    };
+    if (this.alertState['keypad-moved']) { this.setAlert('keypad-moved', false); this.theftTimer = setTimeout(fire, 2000); } else fire();
+  }
+
+  // ---------- Activity log (Nuki Web): history for the settings page, and events MQTT does not send ----------
+
+  async pollActivity() {
+    const web = this.web();
+    if (!web || this.activityBusy) return;
+    this.activityBusy = true;
+    try {
+      const list = await web.listLog(30);
+      const ids = new Set(list.map((e) => e.id));
+      const first = !this.activitySeen;
+      const fresh = first ? [] : list.filter((e) => !this.activitySeen.has(e.id));
+      this.activitySeen = ids;
+      for (const e of fresh.reverse()) {
+        const text = JSON.stringify(e);
+        if (/theft|tamper|moved|removed/i.test(text) || !KNOWN_LOG_ACTIONS.has(Number(e.action))) {
+          if (!KNOWN_LOG_ACTIONS.has(Number(e.action))) this.log.warn(`Nuki activity log: new kind of entry (action ${e.action}, trigger ${e.trigger}, "${e.name || ''}") — treated as "keypad moved"`);
+          this.keypadMoved(`Nuki activity log, action ${e.action}`);
+        }
+      }
+      const history = list.slice(0, 20).map((e) => ({ date: e.date, action: e.action, trigger: e.trigger, source: e.source, name: e.name || '', state: e.state }));
+      if (JSON.stringify(history) !== JSON.stringify(this.history)) { this.history = history; this.writeStatus(); }
+    } catch (e) {
+      if (!this.activityWarned) this.log.warn(`Activity log: ${e.message}`);
+      this.activityWarned = true;
+    } finally {
+      this.activityBusy = false;
+    }
+  }
+
+  // ---------- Test buttons on the settings page (the page writes a small file, the plugin picks it up) ----------
+
+  testFile() { return require('path').join(this.api.user.storagePath(), 'nuki-matter-lock', 'test-alert.json'); }
+
+  watchTests() {
+    const fs = require('fs');
+    let last = null;
+    try { last = fs.readFileSync(this.testFile(), 'utf8'); } catch (e) { /* none */ }
+    fs.watchFile(this.testFile(), { interval: 2000 }, () => {
+      let raw;
+      try { raw = fs.readFileSync(this.testFile(), 'utf8'); } catch (e) { return; }
+      if (raw === last) return;
+      last = raw;
+      let req;
+      try { req = JSON.parse(raw); } catch (e) { return; }
+      if (!req || Date.now() - Date.parse(req.at) > 60000) return;
+      this.testAlert(req.alert);
+    });
+  }
+
+  testAlert(key) {
+    if (key === 'keypad-moved') return this.keypadMoved('test from the settings page', true);
+    if (!this.alertSvc || !this.alertSvc[key]) { this.log.warn(`Test: the "${key}" alert is off`); return; }
+    this.log.warn(`ALERT (TEST): ${key}`);
+    this.setAlert(key, true);
+    if (key === 'forced-open' && this.matter && this.matter.reportAlarm) this.matter.reportAlarm(6).catch(() => {});
+    setTimeout(() => this.setAlert(key, false), 15000);
   }
 
   onKeypadBattery(raw) {
@@ -692,6 +781,7 @@ class NukiMqttEvents {
           nukiId: this.nukiId || null, lastSeen: this.lastSeen || null, nukiState: this.nukiState,
           battery: this.battery, doorOpen: this.doorOpen, matter: pairing, codes, childOn: this.childOn,
           people: this.config.personSensors ? this.loadPeople() : [],
+          history: this.history || null,
         };
         fs.writeFileSync(path.join(dir, 'ui-status.json'), JSON.stringify(status, null, 2));
       } catch (e) { /* the status file is only for the settings page */ }
@@ -1110,8 +1200,16 @@ class NukiMqttEvents {
     } else if (topicMatches(this.stateTopic(), topic)) {
       this.learnId(topic);
       this.onNukiState(payload);
-    } else if ((this.lockCfg || this.hapLock) && topicMatches(this.batteryTopic(), topic)) {
+    } else if ((this.lockCfg || this.hapLock) && topicMatches(this.batteryTopic(), topic) && /^battery/.test(topic.split('/').pop())) {
       this.onBattery(topic.split('/').pop(), payload);
+    } else {
+      const field = topic.split('/').pop();
+      if (/theft|tamper|moved|removed/i.test(field)) {
+        if (!retained && !['', '0', 'false', 'off'].includes(String(payload).toLowerCase())) this.keypadMoved(`MQTT ${field} = ${payload}`);
+      } else {
+        this.seenTopics = this.seenTopics || new Set();
+        if (!this.seenTopics.has(field)) { this.seenTopics.add(field); this.log.debug(`MQTT topic ${topic} = ${payload}`); }
+      }
     }
   }
 

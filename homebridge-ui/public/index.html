@@ -44,6 +44,14 @@
   .nk .form-control:focus { background-color: rgba(128, 128, 128, 0.18); color: inherit; border-color: var(--nk-accent); box-shadow: 0 0 0 1px var(--nk-accent); }
   .nk select.form-control option { color: #111; }
   .nk .form-control::placeholder { color: inherit; opacity: 0.45; }
+  .nk .nk-new ul { margin: 0.2rem 0 0.4rem; padding-inline-start: 1.2em; }
+  .nk .nk-new li { margin-bottom: 0.25rem; }
+  .nk .nk-new .nk-ver { font-weight: 700; }
+  .nk .nk-hist { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .nk .nk-hist td { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--nk-line); vertical-align: top; }
+  .nk .nk-hist tr:last-child td { border-bottom: 0; }
+  .nk .nk-hist td:first-child { white-space: nowrap; opacity: 0.75; }
+  .nk .nk-tests { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
   [dir="rtl"] .nk { text-align: right; }
 </style>
 
@@ -66,6 +74,12 @@
       <div data-t="status.pairHelp"></div>
       <div class="nk-code" id="nk-pair-code"></div>
     </div>
+  </div>
+
+  <!-- what's new -->
+  <div class="nk-card nk-new" id="nk-new-card" style="display: none">
+    <h3><span>✨</span><span data-t="new.title"></span></h3>
+    <div id="nk-new"></div>
   </div>
 
   <!-- 1 setup -->
@@ -144,6 +158,14 @@
       <li data-t="person.s2"></li>
       <li data-t="person.s3"></li>
     </ol>
+  </div>
+
+  <!-- history -->
+  <div class="nk-card" id="nk-hist-card">
+    <h3><span>🕒</span><span data-t="hist.title"></span></h3>
+    <p class="nk-hint" data-t="hist.help"></p>
+    <div id="nk-hist"></div>
+    <button type="button" class="btn btn-outline-primary btn-sm m-0 mt-2" id="nk-hist-refresh" data-t="hist.refresh"></button>
   </div>
 
   <!-- switches -->
@@ -232,6 +254,24 @@
         'f.child': 'נעילת ילדים', 'f.child.d': 'מנטרלת את הכפתור הפיזי במנעול. צריך טוקן Nuki Web.',
         'f.relock': 'נעילה אוטומטית — הזמן נקבע באפליקציית הבית (בכרטיס המנעול).',
         'alerts.title': 'התראות',
+        'new.title': 'מה חדש',
+        'new.older': 'גרסאות קודמות',
+        'a.theft': 'התראה כשמזיזים את הקודן', 'a.theft.d': 'לקודן Keypad 2 NFC עם מכסה הסוללה של נוקי לזיהוי גניבה. כשמזיזים או עוקרים את הקודן: חיישן נפתח ב‑Home והמנעול מדווח על חבלה. צריך טוקן Nuki Web.',
+        'a.theftName': 'שם החיישן',
+        'a.theftMin': 'כמה דקות החיישן נשאר פתוח',
+        'a.test': 'בדיקת התראות (נשלחת התראה אמיתית ל‑Home ונעלמת אחרי 15 שניות):',
+        'a.test.theft': 'בדיקה: קודן הוזז', 'a.test.forced': 'בדיקה: פריצה', 'a.test.left': 'בדיקה: דלת פתוחה',
+        'a.test.sent': 'נשלח. ההתראה תגיע תוך כמה שניות.', 'a.test.fail': 'הבדיקה נכשלה: {msg}',
+        'hist.title': 'היסטוריית פתיחות',
+        'hist.help': '20 הפעולות האחרונות מיומן הפעילות של נוקי (מתעדכן כל דקה; צריך טוקן Nuki Web). השינויים האחרונים יכולים להגיע באיחור של כמה דקות.',
+        'hist.none': 'עוד אין נתונים. שמרו, הפעילו מחדש וחכו דקה.',
+        'hist.refresh': 'רענון',
+        'act.1': 'פתיחת נעילה', 'act.2': 'נעילה', 'act.3': 'פתיחת הדלת (לשונית)', 'act.4': "Lock 'n' Go", 'act.5': "Lock 'n' Go ופתיחה",
+        'act.208': 'אזהרה: הדלת פתוחה', 'act.209': 'אזהרה: מצב דלת לא תואם', 'act.224': '⚠️ קוד שגוי בקודן',
+        'act.240': 'הדלת נפתחה', 'act.241': 'הדלת נסגרה', 'act.242': 'חיישן הדלת תקוע', 'act.243': 'עדכון גרסה',
+        'act.252': 'אתחול', 'act.253': 'כיול', 'act.other': 'פעולה {n}',
+        'tr.0': 'מערכת / Home', 'tr.1': 'ידנית', 'tr.2': 'כפתור במנעול', 'tr.3': 'אוטומטית', 'tr.4': 'Nuki Web', 'tr.5': 'אפליקציית נוקי', 'tr.6': 'נעילה אוטומטית', 'tr.7': 'אביזר', 'tr.255': 'קודן',
+        'src.1': 'קוד', 'src.2': 'טביעת אצבע',
         'a.forced': 'חיישן פריצה', 'a.forced.d': 'נפתח אם הדלת נפתחה בזמן שהמנעול נעול. הפעילו לו התראות באפליקציית הבית.',
         'a.forcedName': 'שם החיישן',
         'a.left': 'חיישן "דלת נשארה פתוחה"', 'a.left.d': 'מתריע כשהדלת פתוחה יותר מהזמן שבחרתם.',
@@ -330,6 +370,24 @@
         'f.child': 'Child lock', 'f.child.d': 'Turns off the physical button on the lock. Needs the Nuki Web token.',
         'f.relock': 'Auto-lock — the time is set in the Home app (on the lock).',
         'alerts.title': 'Alerts',
+        'new.title': "What's new",
+        'new.older': 'Earlier versions',
+        'a.theft': 'Alert when the keypad is moved', 'a.theft.d': "For the Keypad 2 NFC with Nuki's theft-detection battery cover. When the keypad is moved or pulled off: a sensor opens in Home and the lock reports tampering. Needs the Nuki Web token.",
+        'a.theftName': 'Sensor name',
+        'a.theftMin': 'Minutes the sensor stays open',
+        'a.test': 'Test the alerts (a real notification goes to Home and clears after 15 seconds):',
+        'a.test.theft': 'Test: keypad moved', 'a.test.forced': 'Test: forced open', 'a.test.left': 'Test: door left open',
+        'a.test.sent': 'Sent. The notification arrives within a few seconds.', 'a.test.fail': 'Test failed: {msg}',
+        'hist.title': 'Activity history',
+        'hist.help': 'The last 20 actions from the Nuki activity log (refreshed every minute; needs the Nuki Web token). The newest ones can be a few minutes late.',
+        'hist.none': 'No data yet. Save, restart and wait a minute.',
+        'hist.refresh': 'Refresh',
+        'act.1': 'Unlock', 'act.2': 'Lock', 'act.3': 'Unlatch (open door)', 'act.4': "Lock 'n' Go", 'act.5': "Lock 'n' Go with unlatch",
+        'act.208': 'Warning: door open', 'act.209': 'Warning: door state mismatch', 'act.224': '⚠️ Wrong keypad code',
+        'act.240': 'Door opened', 'act.241': 'Door closed', 'act.242': 'Door sensor jammed', 'act.243': 'Firmware update',
+        'act.252': 'Initialization', 'act.253': 'Calibration', 'act.other': 'Action {n}',
+        'tr.0': 'System / Home', 'tr.1': 'Manual', 'tr.2': 'Button on the lock', 'tr.3': 'Automatic', 'tr.4': 'Nuki Web', 'tr.5': 'Nuki app', 'tr.6': 'Auto-lock', 'tr.7': 'Accessory', 'tr.255': 'Keypad',
+        'src.1': 'code', 'src.2': 'fingerprint',
         'a.forced': 'Forced-entry sensor', 'a.forced.d': 'Opens if the door opens while the lock is locked. Turn on its notifications in the Home app.',
         'a.forcedName': 'Sensor name',
         'a.left': '"Door left open" sensor', 'a.left.d': 'Alerts when the door has been open longer than you choose.',
@@ -375,6 +433,7 @@
     let status = null;
     let ips = [];
     let people = null;
+    let news = null;
 
     const t = (key, vars) => {
       let s = (STR[lang] && STR[lang][key]) || STR.en[key] || key;
@@ -538,6 +597,66 @@
         if (a.repeat !== false) box.appendChild(field('a.repeatMin', input('nk-a-rmin', a.repeatMinutes ?? a.leftOpenMinutes ?? 5, '5', (v) => set('repeatMinutes', v), 'number')));
         box.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
       }
+      const theftOn = a.keypadMoved !== false;
+      box.appendChild(toggle('nk-a-theft', theftOn, 'a.theft', 'a.theft.d', async (v) => { await set('keypadMoved', v); renderAlerts(); }));
+      if (theftOn) {
+        box.appendChild(field('a.theftName', input('nk-a-tname', a.keypadMovedName, 'Keypad Moved', (v) => set('keypadMovedName', v))));
+        box.appendChild(field('a.theftMin', input('nk-a-tmin', a.keypadMovedMinutes ?? 5, '5', (v) => set('keypadMovedMinutes', v || 5), 'number')));
+      }
+      const tests = document.createElement('div');
+      tests.innerHTML = `<div class="nk-hint" style="margin-bottom:0">${esc(t('a.test'))}</div>`;
+      const row = document.createElement('div');
+      row.className = 'nk-tests';
+      const res = document.createElement('div');
+      res.className = 'nk-hint';
+      const add = (key, label, on) => {
+        if (!on) return;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-outline-danger btn-sm m-0';
+        b.textContent = t(label);
+        b.addEventListener('click', async () => {
+          try { await homebridge.request('/test-alert', { alert: key }); res.textContent = t('a.test.sent'); } catch (e) { res.textContent = t('a.test.fail', { msg: (e && e.message) || String(e) }); }
+        });
+        row.appendChild(b);
+      };
+      add('keypad-moved', 'a.test.theft', theftOn);
+      add('forced-open', 'a.test.forced', a.forcedOpen !== false);
+      add('left-open', 'a.test.left', leftOn);
+      if (row.children.length) { tests.appendChild(row); tests.appendChild(res); box.appendChild(tests); }
+    }
+
+    function renderNew() {
+      const box = $('nk-new');
+      const list = (news && news.versions) || [];
+      $('nk-new-card').style.display = list.length ? '' : 'none';
+      box.innerHTML = '';
+      list.forEach((v, i) => {
+        const items = (v[lang] && v[lang].length ? v[lang] : v.en) || [];
+        const html = `<div class="nk-ver">${esc(v.version)}</div><ul>${items.map((x) => `<li>${esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</li>`).join('')}</ul>`;
+        if (i === 0) { box.insertAdjacentHTML('beforeend', html); return; }
+        let d = box.querySelector('details');
+        if (!d) { d = document.createElement('details'); d.innerHTML = `<summary>${esc(t('new.older'))}</summary>`; box.appendChild(d); }
+        d.insertAdjacentHTML('beforeend', html);
+      });
+    }
+
+    function renderHistory() {
+      const box = $('nk-hist');
+      const hasToken = !!(cfg.childLock && cfg.childLock.token);
+      $('nk-hist-card').style.display = hasToken ? '' : 'none';
+      const list = (status && status.history) || [];
+      if (!list.length) { box.innerHTML = `<div class="nk-hint">${esc(t('hist.none'))}</div>`; return; }
+      const fmt = new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const has = (k) => STR.en[k] !== undefined;
+      const rows = list.map((e) => {
+        const what = has('act.' + e.action) ? t('act.' + e.action) : t('act.other', { n: e.action });
+        let how = has('tr.' + e.trigger) ? t('tr.' + e.trigger) : '';
+        if (has('src.' + e.source) && (e.trigger === 255 || e.trigger === 7)) how += ` (${t('src.' + e.source)})`;
+        const when = e.date ? fmt.format(new Date(e.date)) : '';
+        return `<tr><td>${esc(when)}</td><td><b>${esc(what)}</b></td><td>${esc(e.name || '')}</td><td>${esc(how)}</td></tr>`;
+      });
+      box.innerHTML = `<table class="nk-hist"><tbody>${rows.join('')}</tbody></table>`;
     }
 
     function renderPerson() {
@@ -645,6 +764,8 @@
       renderFeatures();
       renderAlerts();
       renderPerson();
+      renderNew();
+      renderHistory();
       renderSwitches();
       renderCustom();
       for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.getAttribute('data-t'), { door: doorName() });
@@ -671,7 +792,12 @@
       if (!list || !list[0]) await homebridge.updatePluginConfig([cfg]);
       lang = cfg.uiLanguage || ((navigator.language || '').toLowerCase().startsWith('he') ? 'he' : 'en');
       try { const r = await homebridge.request('/status'); status = r.status; ips = r.ips || []; } catch (e) { status = null; }
+      try { news = await homebridge.request('/changelog'); } catch (e) { news = null; }
       applyLanguage();
+      $('nk-hist-refresh').addEventListener('click', async () => {
+        try { const r = await homebridge.request('/status'); status = r.status; } catch (e) { /* keep the old one */ }
+        renderHistory();
+      });
 
       for (const b of document.querySelectorAll('[data-lang]')) {
         b.addEventListener('click', async () => { lang = b.dataset.lang; cfg.uiLanguage = lang; await homebridge.updatePluginConfig([cfg]); applyLanguage(); });

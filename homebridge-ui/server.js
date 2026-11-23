@@ -13,6 +13,8 @@ class UiServer extends HomebridgePluginUiServer {
     this.dir = path.join(this.homebridgeStoragePath, 'nuki-matter-lock');
     this.onRequest('/status', () => this.status());
     this.onRequest('/nuki-web', (p) => this.nukiWeb(p || {}));
+    this.onRequest('/test-alert', (p) => this.testAlert(p || {}));
+    this.onRequest('/changelog', () => this.changelog());
     this.ready();
   }
 
@@ -24,6 +26,31 @@ class UiServer extends HomebridgePluginUiServer {
       for (const a of list || []) if (a.family === 'IPv4' && !a.internal) ips.push(a.address);
     }
     return { status, ips };
+  }
+
+  // The running plugin watches this file and fires the alert for a few seconds
+  testAlert({ alert }) {
+    if (!['keypad-moved', 'forced-open', 'left-open'].includes(alert)) throw new RequestError('unknown alert', { code: 'bad' });
+    fs.mkdirSync(this.dir, { recursive: true });
+    fs.writeFileSync(path.join(this.dir, 'test-alert.json'), JSON.stringify({ alert, at: new Date().toISOString() }));
+    return { ok: true };
+  }
+
+  // "What's new": the latest versions from CHANGELOG.md, in English and Hebrew
+  changelog() {
+    let text = '';
+    try { text = fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8'); } catch (e) { return { versions: [] }; }
+    const versions = [];
+    for (const part of text.split(/^## /m).slice(1, 4)) {
+      const [head, ...rest] = part.split('\n');
+      const body = rest.join('\n');
+      const pick = (name) => {
+        const m = body.split(/^### /m).find((x) => x.startsWith(name));
+        return m ? m.split('\n').slice(1).filter((l) => /^\s*[-*] /.test(l)).map((l) => l.replace(/^\s*[-*] /, '').trim()) : [];
+      };
+      versions.push({ version: head.trim(), en: pick('English'), he: pick('עברית') });
+    }
+    return { versions };
   }
 
   // Checks the token and lists the people on the lock (for "who opened")

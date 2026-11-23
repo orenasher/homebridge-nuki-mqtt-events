@@ -375,6 +375,21 @@
                 "title": "Door-left-open sensor name",
                 "type": "string",
                 "placeholder": "Door Left Open"
+              },
+              "keypadMoved": {
+                "title": "Keypad moved alert (Keypad 2 NFC theft detection)",
+                "type": "boolean",
+                "default": true
+              },
+              "keypadMovedName": {
+                "title": "Keypad-moved sensor name",
+                "type": "string",
+                "placeholder": "Keypad Moved"
+              },
+              "keypadMovedMinutes": {
+                "title": "Keypad-moved sensor stays open (minutes)",
+                "type": "integer",
+                "minimum": 1
               }
             }
           },
@@ -423,6 +438,18 @@
         "additionalProperties": {
           "type": "string"
         }
+      },
+      "activityLog": {
+        "title": "Activity history from the Nuki activity log",
+        "type": "boolean",
+        "default": true,
+        "description": "Shows the last actions in the settings page and catches events MQTT does not send (keypad moved). Needs the Nuki Web token."
+      },
+      "activityPollSeconds": {
+        "title": "Activity log check (seconds)",
+        "type": "integer",
+        "minimum": 30,
+        "placeholder": "60"
       }
     }
   },
@@ -531,7 +558,9 @@
         "doorLock.alerts",
         "doorLock.showDoorState",
         "personSensors",
-        "peopleOff"
+        "peopleOff",
+        "activityLog",
+        "activityPollSeconds"
       ]
     }
   ],

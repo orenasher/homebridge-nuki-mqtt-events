@@ -69,6 +69,13 @@ class NukiWeb {
     return Array.isArray(list) ? list : [];
   }
 
+  // Activity log (newest first). Needs the token right "View devices".
+  async listLog(limit = 30) {
+    const id = await this.findId();
+    const list = await request(this.token, 'GET', `/smartlock/${id}/log?limit=${Number(limit) || 30}`);
+    return Array.isArray(list) ? list : [];
+  }
+
   async addKeypadCode(name, code, limits = {}) {
     const id = await this.findId();
     await request(this.token, 'PUT', `/smartlock/${id}/auth`, { name: name.slice(0, 20), type: 13, code: Number(code), ...limits });

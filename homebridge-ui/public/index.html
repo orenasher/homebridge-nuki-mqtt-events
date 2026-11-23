@@ -256,7 +256,7 @@
         'alerts.title': 'התראות',
         'new.title': 'מה חדש',
         'new.older': 'גרסאות קודמות',
-        'a.theft': 'התראה כשמזיזים את הקודן', 'a.theft.d': 'לקודן Keypad 2 NFC עם מכסה הסוללה של נוקי לזיהוי גניבה. כשמזיזים או עוקרים את הקודן: חיישן נפתח ב‑Home והמנעול מדווח על חבלה. צריך טוקן Nuki Web.',
+        'a.theft': 'התראה כשמזיזים את הקודן', 'a.theft.d': 'רק אם יש לכם את מכסה הסוללה של נוקי לזיהוי גניבה (Keypad 2 NFC, נמכר בנפרד) — בלעדיו הקודן לא מרגיש שמזיזים אותו. כשמזיזים או עוקרים את הקודן: חיישן נפתח ב‑Home והמנעול מדווח על חבלה. צריך טוקן Nuki Web.',
         'a.theftName': 'שם החיישן',
         'a.theftMin': 'כמה דקות החיישן נשאר פתוח',
         'a.test': 'בדיקת התראות (נשלחת התראה אמיתית ל‑Home ונעלמת אחרי 15 שניות):',
@@ -372,7 +372,7 @@
         'alerts.title': 'Alerts',
         'new.title': "What's new",
         'new.older': 'Earlier versions',
-        'a.theft': 'Alert when the keypad is moved', 'a.theft.d': "For the Keypad 2 NFC with Nuki's theft-detection battery cover. When the keypad is moved or pulled off: a sensor opens in Home and the lock reports tampering. Needs the Nuki Web token.",
+        'a.theft': 'Alert when the keypad is moved', 'a.theft.d': "Only if you have Nuki's theft-detection battery cover (Keypad 2 NFC, sold separately) — without it the keypad cannot tell it was moved. When the keypad is moved or pulled off: a sensor opens in Home and the lock reports tampering. Needs the Nuki Web token.",
         'a.theftName': 'Sensor name',
         'a.theftMin': 'Minutes the sensor stays open',
         'a.test': 'Test the alerts (a real notification goes to Home and clears after 15 seconds):',
@@ -597,7 +597,7 @@
         if (a.repeat !== false) box.appendChild(field('a.repeatMin', input('nk-a-rmin', a.repeatMinutes ?? a.leftOpenMinutes ?? 5, '5', (v) => set('repeatMinutes', v), 'number')));
         box.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
       }
-      const theftOn = a.keypadMoved !== false;
+      const theftOn = a.keypadMoved === true;
       box.appendChild(toggle('nk-a-theft', theftOn, 'a.theft', 'a.theft.d', async (v) => { await set('keypadMoved', v); renderAlerts(); }));
       if (theftOn) {
         box.appendChild(field('a.theftName', input('nk-a-tname', a.keypadMovedName, 'Keypad Moved', (v) => set('keypadMovedName', v))));

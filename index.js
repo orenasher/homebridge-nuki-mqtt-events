@@ -352,7 +352,7 @@ class NukiMqttEvents {
       leftMin: a.leftOpenMinutes === undefined || a.leftOpenMinutes === null || a.leftOpenMinutes === '' ? 5 : Number(a.leftOpenMinutes) || 0,
       repeatMin: a.repeat === false ? 0 : Number(a.repeatMinutes) || Number(a.leftOpenMinutes) || 5,
       leftName: a.leftOpenName || 'Door Left Open',
-      theft: a.keypadMoved !== false,
+      theft: a.keypadMoved === true, // only with Nuki's theft-detection battery cover — off until turned on
       theftName: a.keypadMovedName || 'Keypad Moved',
       theftMin: Number(a.keypadMovedMinutes) || 5,
     };

@@ -2,6 +2,14 @@
 
 Every version in English and in Hebrew. The settings page of the plugin shows the latest ones under **What's new**.
 
+## 1.17.2
+
+### English
+- The "Keypad moved" alert is now off by default — turn it on in the settings page only if you have Nuki's theft-detection battery cover. Without it the sensor is removed from Home.
+
+### עברית
+- ההתראה "הקודן הוזז" כבויה עכשיו כברירת מחדל — מפעילים אותה בדף ההגדרות רק אם יש לכם את מכסה הסוללה של נוקי לזיהוי גניבה. בלעדיה החיישן מוסר מ‑Home.
+
 ## 1.17.1
 
 ### English

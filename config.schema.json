@@ -379,7 +379,7 @@
               "keypadMoved": {
                 "title": "Keypad moved alert (Keypad 2 NFC theft detection)",
                 "type": "boolean",
-                "default": true
+                "default": false
               },
               "keypadMovedName": {
                 "title": "Keypad-moved sensor name",

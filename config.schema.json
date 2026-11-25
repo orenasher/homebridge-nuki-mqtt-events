@@ -390,6 +390,16 @@
                 "title": "Keypad-moved sensor stays open (minutes)",
                 "type": "integer",
                 "minimum": 1
+              },
+              "jammed": {
+                "title": "\"Lock Jammed\" sensor (for automations)",
+                "type": "boolean",
+                "default": true
+              },
+              "jammedName": {
+                "title": "Lock-jammed sensor name",
+                "type": "string",
+                "placeholder": "Lock Jammed"
               }
             }
           },

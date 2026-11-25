@@ -260,6 +260,7 @@
         'a.theftName': 'שם החיישן',
         'a.theftMin': 'כמה דקות החיישן נשאר פתוח',
         'a.test': 'בדיקת התראות (נשלחת התראה אמיתית ל‑Home ונעלמת אחרי 15 שניות):',
+        'a.jam': 'חיישן "המנעול נתקע"', 'a.jam.d': 'נפתח כשהמנעול נתקע ונסגר כשהוא חוזר לעבוד. נוח לאוטומציות (למשל הכרזה ב‑HomePod) — Home מפעיל אוטומציות על חיישן בצורה אמינה יותר מאשר על מצב "נתקע" של המנעול.', 'a.jamName': 'שם החיישן', 'a.test.jam': 'בדיקה: המנעול נתקע',
         'a.test.theft': 'בדיקה: קודן הוזז', 'a.test.forced': 'בדיקה: פריצה', 'a.test.left': 'בדיקה: דלת פתוחה',
         'a.test.sent': 'נשלח. ההתראה תגיע תוך כמה שניות.', 'a.test.fail': 'הבדיקה נכשלה: {msg}',
         'hist.title': 'היסטוריית פתיחות',
@@ -376,6 +377,7 @@
         'a.theftName': 'Sensor name',
         'a.theftMin': 'Minutes the sensor stays open',
         'a.test': 'Test the alerts (a real notification goes to Home and clears after 15 seconds):',
+        'a.jam': '"Lock Jammed" sensor', 'a.jam.d': "Opens when the lock jams and closes when it works again. Handy for automations (e.g. a HomePod announcement) — Home runs automations on a sensor more reliably than on the lock's jammed state.", 'a.jamName': 'Sensor name', 'a.test.jam': 'Test: lock jammed',
         'a.test.theft': 'Test: keypad moved', 'a.test.forced': 'Test: forced open', 'a.test.left': 'Test: door left open',
         'a.test.sent': 'Sent. The notification arrives within a few seconds.', 'a.test.fail': 'Test failed: {msg}',
         'hist.title': 'Activity history',
@@ -598,6 +600,9 @@
         box.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
       }
       const theftOn = a.keypadMoved === true;
+      const jamOn = a.jammed !== false;
+      box.appendChild(toggle('nk-a-jam', jamOn, 'a.jam', 'a.jam.d', async (v) => { await set('jammed', v); renderAlerts(); }));
+      if (jamOn) box.appendChild(field('a.jamName', input('nk-a-jname', a.jammedName, 'Lock Jammed', (v) => set('jammedName', v))));
       box.appendChild(toggle('nk-a-theft', theftOn, 'a.theft', 'a.theft.d', async (v) => { await set('keypadMoved', v); renderAlerts(); }));
       if (theftOn) {
         box.appendChild(field('a.theftName', input('nk-a-tname', a.keypadMovedName, 'Keypad Moved', (v) => set('keypadMovedName', v))));
@@ -620,6 +625,7 @@
         });
         row.appendChild(b);
       };
+      add('jammed', 'a.test.jam', jamOn);
       add('keypad-moved', 'a.test.theft', theftOn);
       add('forced-open', 'a.test.forced', a.forcedOpen !== false);
       add('left-open', 'a.test.left', leftOn);

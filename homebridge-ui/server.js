@@ -30,7 +30,7 @@ class UiServer extends HomebridgePluginUiServer {
 
   // The running plugin watches this file and fires the alert for a few seconds
   testAlert({ alert }) {
-    if (!['keypad-moved', 'forced-open', 'left-open'].includes(alert)) throw new RequestError('unknown alert', { code: 'bad' });
+    if (!['keypad-moved', 'forced-open', 'left-open', 'jammed'].includes(alert)) throw new RequestError('unknown alert', { code: 'bad' });
     fs.mkdirSync(this.dir, { recursive: true });
     fs.writeFileSync(path.join(this.dir, 'test-alert.json'), JSON.stringify({ alert, at: new Date().toISOString() }));
     return { ok: true };

@@ -2,6 +2,14 @@
 
 Every version in English and in Hebrew. The settings page of the plugin shows the latest ones under **What's new**.
 
+## 1.17.3
+
+### English
+- New **"Lock Jammed" sensor**: opens when the lock jams and closes when it works again. Build Home automations on it (e.g. a HomePod announcement) — an automation on the lock's own "jammed" state may not run. Test button included.
+
+### עברית
+- **חיישן "המנעול נתקע"** חדש: נפתח כשהמנעול נתקע ונסגר כשהוא חוזר לעבוד. בונים עליו אוטומציות ב‑Home (למשל הכרזה ב‑HomePod) — אוטומציה על מצב "נתקע" של המנעול עצמו לפעמים לא רצה. כולל כפתור בדיקה.
+
 ## 1.17.2
 
 ### English

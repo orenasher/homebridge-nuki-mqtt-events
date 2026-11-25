@@ -355,6 +355,8 @@ class NukiMqttEvents {
       theft: a.keypadMoved === true, // only with Nuki's theft-detection battery cover — off until turned on
       theftName: a.keypadMovedName || 'Keypad Moved',
       theftMin: Number(a.keypadMovedMinutes) || 5,
+      jam: a.jammed !== false,
+      jamName: a.jammedName || 'Lock Jammed',
     };
   }
 
@@ -393,6 +395,7 @@ class NukiMqttEvents {
     if (c.forced) ids.push(this.sensorAcc('forced-open', c.forcedName, 'Door Forced Open'));
     if (c.leftMin > 0) ids.push(this.sensorAcc('left-open', c.leftName, 'Door Left Open'));
     if (c.theft) ids.push(this.sensorAcc('keypad-moved', c.theftName, 'Keypad Moved'));
+    if (c.jam) ids.push(this.sensorAcc('jammed', c.jamName, 'Lock Jammed'));
     return ids;
   }
 
@@ -530,6 +533,7 @@ class NukiMqttEvents {
     this.log.warn(`ALERT (TEST): ${key}`);
     this.setAlert(key, true);
     if (key === 'forced-open' && this.matter && this.matter.reportAlarm) this.matter.reportAlarm(6).catch(() => {});
+    if (key === 'jammed' && this.matter && this.matter.reportAlarm) this.matter.reportAlarm(0).catch(() => {});
     setTimeout(() => this.setAlert(key, false), 15000);
   }
 
@@ -1111,6 +1115,10 @@ class NukiMqttEvents {
     if (s !== 1) this.touchLock();
     if (s === 254) this.log.warn('Nuki state: MOTOR BLOCKED — the lock is jammed');
     else this.log.info(`Nuki state: ${NUKI_STATE_NAMES[s] || s}`);
+    // "Lock Jammed" sensor: Home automations trigger reliably on a sensor, unlike on the lock's jammed state
+    if (this.alertSvc && this.alertSvc.jammed) {
+      if (s === 254) { this.log.warn('ALERT: the lock is jammed'); this.setAlert('jammed', true); } else if (this.alertState.jammed) this.setAlert('jammed', false);
+    }
     for (const w of [...this.stateWaiters]) w.check(s);
     this.pushLockState();
     const nowLocked = s === 1, nowUnlocked = UNLOCKED_STATES.includes(s);

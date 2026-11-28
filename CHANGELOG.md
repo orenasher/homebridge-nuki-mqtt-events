@@ -2,6 +2,20 @@
 
 Every version in English and in Hebrew. The settings page of the plugin shows the latest ones under **What's new**.
 
+## 1.19.0
+
+### English
+- New **"Lock Battery Low" sensor**: opens when the lock battery is at 20% or less and not charging, and alerts again every 2 hours until it is charged. Starting to charge stops the alerts. Percent, hours, night mode and name are in the settings page, with a test button.
+- The **"Keypad Battery Low"** sensor now repeats every 2 hours (was every hour).
+- No repeated alerts at night (23:00–07:00) for both.
+- **Alerts in the settings page are now one card per sensor**, grouped by door, lock and keypad, each with its own settings and its own test button.
+
+### עברית
+- **חיישן "סוללת המנעול חלשה"** חדש: נפתח כשהסוללה של המנעול ב‑20% או פחות ולא בטעינה, ומתריע שוב כל שעתיים עד שמטעינים. ברגע שמתחילים לטעון — ההתראות נפסקות. את האחוז, הזמן, מצב הלילה והשם קובעים בדף ההגדרות, וכולל כפתור בדיקה.
+- חיישן **"סוללת הקודן חלשה"** מתריע עכשיו כל שעתיים (במקום כל שעה).
+- בלילה (23:00–07:00) אין התראות חוזרות בשניהם.
+- **ההתראות בדף ההגדרות מסודרות עכשיו בכרטיס נפרד לכל חיישן**, בקבוצות של דלת, מנעול וקודן — לכל אחד ההגדרות שלו וכפתור בדיקה משלו.
+
 ## 1.18.0
 
 ### English

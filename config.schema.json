@@ -415,10 +415,38 @@
                 "title": "Keypad battery: alert again every … minutes (0 = once)",
                 "type": "integer",
                 "minimum": 0,
-                "placeholder": "60"
+                "placeholder": "120"
               },
               "keypadBatteryQuietNight": {
                 "title": "Keypad battery: no repeated alerts at night (23:00–07:00)",
+                "type": "boolean",
+                "default": true
+              },
+              "lockBattery": {
+                "title": "\"Lock Battery Low\" sensor",
+                "type": "boolean",
+                "default": true
+              },
+              "lockBatteryName": {
+                "title": "Lock-battery sensor name",
+                "type": "string",
+                "placeholder": "Lock Battery Low"
+              },
+              "lockBatteryPercent": {
+                "title": "Lock battery: alert at or below … percent",
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 90,
+                "placeholder": "20"
+              },
+              "lockBatteryRepeatMinutes": {
+                "title": "Lock battery: alert again every … minutes (0 = once)",
+                "type": "integer",
+                "minimum": 0,
+                "placeholder": "120"
+              },
+              "lockBatteryQuietNight": {
+                "title": "Lock battery: no repeated alerts at night (23:00–07:00)",
                 "type": "boolean",
                 "default": true
               }

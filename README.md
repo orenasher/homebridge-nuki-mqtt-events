@@ -105,10 +105,11 @@ In the lock's page in Home → **Manage Access**: add your code, or a guest with
 Codes you add directly in the Nuki app are not touched by the plugin.
 
 ## 8. Alerts
-Up to five sensors are added to Home (turn on their notifications in the Home app):
+Up to six sensors are added to Home (turn on their notifications in the Home app):
 - **Door Forced Open** — opens when the door is opened while the lock is locked. It waits 10 seconds for the lock's own report first (the Nuki's message can come a few seconds after the door sensor), so a normal opening from inside does not set it off.
 - **Door Left Open** — opens after the door has been open 5 minutes, and again every 5 minutes while it stays open.
-- **Keypad Battery Low** — opens when Nuki reports the keypad battery is low, and opens again every 60 minutes (a new notification each time) until the batteries are replaced. No repeats at night (23:00–07:00). Minutes and night mode are in the settings page.
+- **Keypad Battery Low** — opens when Nuki reports the keypad battery is low, and opens again every 2 hours (a new notification each time) until the batteries are replaced. No repeats at night (23:00–07:00). Minutes and night mode are in the settings page.
+- **Lock Battery Low** — opens when the lock battery is at 20% or less and not charging, and again every 2 hours until it is charged. Starting to charge stops the alerts. No repeats at night (23:00–07:00). Percent, hours and night mode are in the settings page.
 - **Lock Jammed** — opens when the lock's motor is blocked and closes when the lock works again. Use it for automations (e.g. a HomePod announcement): Home runs automations on a sensor reliably, while an automation on the lock's own "jammed" state may not run.
 - **Keypad Moved** (off until you turn it on in the settings page) — only for the Keypad 2 NFC with Nuki's theft-detection battery cover (sold separately; turn on Theft detection for the keypad in the Nuki app). Without the cover the keypad cannot tell it was moved. When the keypad is moved or pulled off, the sensor opens for 5 minutes and the lock in Home reports tampering. The plugin reads it from the Nuki activity log (checked every minute, needs the Nuki Web token), so the alert can come up to a minute or two after the keypad was moved.
 

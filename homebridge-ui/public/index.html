@@ -51,6 +51,12 @@
   .nk .nk-hist td { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--nk-line); vertical-align: top; }
   .nk .nk-hist tr:last-child td { border-bottom: 0; }
   .nk .nk-hist td:first-child { white-space: nowrap; opacity: 0.75; }
+  .nk .nk-sensor { border: 1px solid var(--nk-line); border-radius: 12px; padding: 0.7rem 0.9rem 0.6rem; margin-bottom: 0.7rem; }
+  .nk .nk-sensor.nk-off { opacity: 0.7; }
+  .nk .nk-sensor-head { display: flex; gap: 0.6rem; align-items: flex-start; }
+  .nk .nk-sensor-head .nk-sensor-icon { font-size: 1.3rem; line-height: 1.6; }
+  .nk .nk-sensor-head > label { flex: 1; margin-bottom: 0.2rem; }
+  .nk .nk-group { font-weight: 700; font-size: 0.85rem; opacity: 0.75; margin: 0.9rem 0 0.4rem; letter-spacing: 0.03em; }
   .nk .nk-tests { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
   [dir="rtl"] .nk { text-align: right; }
 </style>
@@ -261,7 +267,7 @@
         'a.theftMin': 'כמה דקות החיישן נשאר פתוח',
         'a.test': 'בדיקת התראות (נשלחת התראה אמיתית ל‑Home ונעלמת אחרי 15 שניות):',
         'a.jam': 'חיישן "המנעול נתקע"', 'a.jam.d': 'נפתח כשהמנעול נתקע ונסגר כשהוא חוזר לעבוד. נוח לאוטומציות (למשל הכרזה ב‑HomePod) — Home מפעיל אוטומציות על חיישן בצורה אמינה יותר מאשר על מצב "נתקע" של המנעול.', 'a.jamName': 'שם החיישן', 'a.test.jam': 'בדיקה: המנעול נתקע',
-        'a.kbat': 'חיישן "סוללת הקודן חלשה"', 'a.kbat.d': 'נפתח כשנוקי מדווחים שהסוללה של הקודן חלשה, ומתריע שוב ושוב עד שמחליפים סוללות.', 'a.kbatName': 'שם החיישן', 'a.kbatRepeat': 'להתריע שוב כל כמה דקות (0 = פעם אחת)', 'a.kbatQuiet': 'בלי התראות חוזרות בלילה (23:00–07:00)', 'a.test.kbat': 'בדיקה: סוללת הקודן',
+        'a.kbat': 'חיישן "סוללת הקודן חלשה"', 'a.kbat.d': 'נפתח כשנוקי מדווחים שהסוללה של הקודן חלשה, ומתריע שוב ושוב עד שמחליפים סוללות.', 'a.kbatName': 'שם החיישן', 'a.kbatRepeat': 'להתריע שוב כל כמה דקות (0 = פעם אחת)', 'a.kbatQuiet': 'בלי התראות חוזרות בלילה (23:00–07:00)', 'a.test.kbat': 'בדיקה: סוללת הקודן', 'a.intro': 'כל התראה היא חיישן נפרד ב‑Home. הפעילו בכל חיישן ב‑Home את ההתראות שלו. כפתור "בדיקה" שולח התראה אמיתית שנעלמת אחרי 15 שניות.', 'a.testBtn': 'בדיקה', 'a.g.door': 'הדלת', 'a.g.lock': 'המנעול', 'a.g.keypad': 'הקודן', 'a.lbat': 'חיישן "סוללת המנעול חלשה"', 'a.lbat.d': 'נפתח כשהסוללה של המנעול יורדת לאחוז שבחרתם או פחות (ולא בטעינה), ומתריע שוב ושוב עד שמטעינים. מתחילים לטעון — ההתראות נפסקות.', 'a.lbatName': 'שם החיישן', 'a.lbatPercent': 'להתריע ב… אחוז או פחות', 'a.test.lbat': 'בדיקה: סוללת המנעול',
         'a.test.theft': 'בדיקה: קודן הוזז', 'a.test.forced': 'בדיקה: פריצה', 'a.test.left': 'בדיקה: דלת פתוחה',
         'a.test.sent': 'נשלח. ההתראה תגיע תוך כמה שניות.', 'a.test.fail': 'הבדיקה נכשלה: {msg}',
         'hist.title': 'היסטוריית פתיחות',
@@ -379,7 +385,7 @@
         'a.theftMin': 'Minutes the sensor stays open',
         'a.test': 'Test the alerts (a real notification goes to Home and clears after 15 seconds):',
         'a.jam': '"Lock Jammed" sensor', 'a.jam.d': "Opens when the lock jams and closes when it works again. Handy for automations (e.g. a HomePod announcement) — Home runs automations on a sensor more reliably than on the lock's jammed state.", 'a.jamName': 'Sensor name', 'a.test.jam': 'Test: lock jammed',
-        'a.kbat': '"Keypad Battery Low" sensor', 'a.kbat.d': 'Opens when Nuki reports the keypad battery is low, and alerts again and again until the batteries are replaced.', 'a.kbatName': 'Sensor name', 'a.kbatRepeat': 'Alert again every … minutes (0 = once)', 'a.kbatQuiet': 'No repeated alerts at night (23:00–07:00)', 'a.test.kbat': 'Test: keypad battery',
+        'a.kbat': '"Keypad Battery Low" sensor', 'a.kbat.d': 'Opens when Nuki reports the keypad battery is low, and alerts again and again until the batteries are replaced.', 'a.kbatName': 'Sensor name', 'a.kbatRepeat': 'Alert again every … minutes (0 = once)', 'a.kbatQuiet': 'No repeated alerts at night (23:00–07:00)', 'a.test.kbat': 'Test: keypad battery', 'a.intro': 'Each alert is its own sensor in Home — turn on its notifications in the Home app. "Test" sends a real notification that clears after 15 seconds.', 'a.testBtn': 'Test', 'a.g.door': 'Door', 'a.g.lock': 'Lock', 'a.g.keypad': 'Keypad', 'a.lbat': '"Lock Battery Low" sensor', 'a.lbat.d': 'Opens when the lock battery drops to the percent you choose (and is not charging), and alerts again and again until it is charged. Charging stops the alerts.', 'a.lbatName': 'Sensor name', 'a.lbatPercent': 'Alert at or below … percent', 'a.test.lbat': 'Test: lock battery',
         'a.test.theft': 'Test: keypad moved', 'a.test.forced': 'Test: forced open', 'a.test.left': 'Test: door left open',
         'a.test.sent': 'Sent. The notification arrives within a few seconds.', 'a.test.fail': 'Test failed: {msg}',
         'hist.title': 'Activity history',
@@ -591,55 +597,70 @@
       box.innerHTML = '';
       const a = (cfg.doorLock && cfg.doorLock.alerts) || {};
       const set = async (k, v) => { obj('doorLock'); cfg.doorLock.alerts = { ...(cfg.doorLock.alerts || {}), [k]: v }; await save(); };
-      box.appendChild(toggle('nk-a-forced', a.forcedOpen !== false, 'a.forced', 'a.forced.d', async (v) => { await set('forcedOpen', v); renderAlerts(); }));
-      if (a.forcedOpen !== false) box.appendChild(field('a.forcedName', input('nk-a-fname', a.forcedName, 'Door Forced Open', (v) => set('forcedName', v))));
-      const leftOn = a.leftOpenMinutes !== 0;
-      box.appendChild(toggle('nk-a-left', leftOn, 'a.left', 'a.left.d', async (v) => { await set('leftOpenMinutes', v ? 5 : 0); renderAlerts(); }));
-      if (leftOn) {
-        box.appendChild(field('a.leftMin', input('nk-a-lmin', a.leftOpenMinutes ?? 5, '5', (v) => set('leftOpenMinutes', v || 5), 'number')));
-        box.appendChild(toggle('nk-a-rep', a.repeat !== false, 'a.repeat', null, async (v) => { await set('repeat', v); renderAlerts(); }));
-        if (a.repeat !== false) box.appendChild(field('a.repeatMin', input('nk-a-rmin', a.repeatMinutes ?? a.leftOpenMinutes ?? 5, '5', (v) => set('repeatMinutes', v), 'number')));
-        box.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
-      }
-      const theftOn = a.keypadMoved === true;
-      const kbatOn = a.keypadBattery !== false;
-      box.appendChild(toggle('nk-a-kbat', kbatOn, 'a.kbat', 'a.kbat.d', async (v) => { await set('keypadBattery', v); renderAlerts(); }));
-      if (kbatOn) {
-        box.appendChild(field('a.kbatName', input('nk-a-kbname', a.keypadBatteryName, 'Keypad Battery Low', (v) => set('keypadBatteryName', v))));
-        box.appendChild(field('a.kbatRepeat', input('nk-a-kbrep', a.keypadBatteryRepeatMinutes ?? 60, '60', (v) => set('keypadBatteryRepeatMinutes', v === '' ? 60 : Number(v)), 'number')));
-        box.appendChild(toggle('nk-a-kbquiet', a.keypadBatteryQuietNight !== false, 'a.kbatQuiet', null, (v) => set('keypadBatteryQuietNight', v)));
-      }
-      const jamOn = a.jammed !== false;
-      box.appendChild(toggle('nk-a-jam', jamOn, 'a.jam', 'a.jam.d', async (v) => { await set('jammed', v); renderAlerts(); }));
-      if (jamOn) box.appendChild(field('a.jamName', input('nk-a-jname', a.jammedName, 'Lock Jammed', (v) => set('jammedName', v))));
-      box.appendChild(toggle('nk-a-theft', theftOn, 'a.theft', 'a.theft.d', async (v) => { await set('keypadMoved', v); renderAlerts(); }));
-      if (theftOn) {
-        box.appendChild(field('a.theftName', input('nk-a-tname', a.keypadMovedName, 'Keypad Moved', (v) => set('keypadMovedName', v))));
-        box.appendChild(field('a.theftMin', input('nk-a-tmin', a.keypadMovedMinutes ?? 5, '5', (v) => set('keypadMovedMinutes', v || 5), 'number')));
-      }
-      const tests = document.createElement('div');
-      tests.innerHTML = `<div class="nk-hint" style="margin-bottom:0">${esc(t('a.test'))}</div>`;
-      const row = document.createElement('div');
-      row.className = 'nk-tests';
-      const res = document.createElement('div');
-      res.className = 'nk-hint';
-      const add = (key, label, on) => {
-        if (!on) return;
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'btn btn-outline-danger btn-sm m-0';
-        b.textContent = t(label);
-        b.addEventListener('click', async () => {
-          try { await homebridge.request('/test-alert', { alert: key }); res.textContent = t('a.test.sent'); } catch (e) { res.textContent = t('a.test.fail', { msg: (e && e.message) || String(e) }); }
-        });
-        row.appendChild(b);
+      const hint = document.createElement('div');
+      hint.className = 'nk-hint';
+      hint.textContent = t('a.intro');
+      box.appendChild(hint);
+      // one card per sensor: on/off, its settings, its own test button
+      const card = (icon, key, testKey, on, onToggle, title, desc, fill) => {
+        const c = document.createElement('div');
+        c.className = 'nk-sensor' + (on ? '' : ' nk-off');
+        const h = document.createElement('div');
+        h.className = 'nk-sensor-head';
+        h.innerHTML = `<span class="nk-sensor-icon">${icon}</span>`;
+        h.appendChild(toggle('nk-a-' + key, on, title, desc, async (v) => { await onToggle(v); renderAlerts(); }));
+        c.appendChild(h);
+        if (on) {
+          if (fill) fill(c);
+          const res = document.createElement('div');
+          res.className = 'nk-hint';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-outline-danger btn-sm m-0 mt-1';
+          btn.textContent = t('a.testBtn');
+          btn.addEventListener('click', async () => {
+            try { await homebridge.request('/test-alert', { alert: testKey }); res.textContent = t('a.test.sent'); } catch (e) { res.textContent = t('a.test.fail', { msg: (e && e.message) || String(e) }); }
+          });
+          c.appendChild(btn);
+          c.appendChild(res);
+        }
+        box.appendChild(c);
       };
-      add('jammed', 'a.test.jam', jamOn);
-      add('keypad-battery', 'a.test.kbat', kbatOn);
-      add('keypad-moved', 'a.test.theft', theftOn);
-      add('forced-open', 'a.test.forced', a.forcedOpen !== false);
-      add('left-open', 'a.test.left', leftOn);
-      if (row.children.length) { tests.appendChild(row); tests.appendChild(res); box.appendChild(tests); }
+      const group = (k) => { const g = document.createElement('div'); g.className = 'nk-group'; g.textContent = t(k); box.appendChild(g); };
+
+      group('a.g.door');
+      card('🚨', 'forced', 'forced-open', a.forcedOpen !== false, (v) => set('forcedOpen', v), 'a.forced', 'a.forced.d', (c) => {
+        c.appendChild(field('a.forcedName', input('nk-a-fname', a.forcedName, 'Door Forced Open', (v) => set('forcedName', v))));
+      });
+      const leftOn = a.leftOpenMinutes !== 0;
+      card('🚪', 'left', 'left-open', leftOn, (v) => set('leftOpenMinutes', v ? 5 : 0), 'a.left', 'a.left.d', (c) => {
+        c.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
+        c.appendChild(field('a.leftMin', input('nk-a-lmin', a.leftOpenMinutes ?? 5, '5', (v) => set('leftOpenMinutes', v || 5), 'number')));
+        c.appendChild(toggle('nk-a-rep', a.repeat !== false, 'a.repeat', null, async (v) => { await set('repeat', v); renderAlerts(); }));
+        if (a.repeat !== false) c.appendChild(field('a.repeatMin', input('nk-a-rmin', a.repeatMinutes ?? a.leftOpenMinutes ?? 5, '5', (v) => set('repeatMinutes', v), 'number')));
+      });
+
+      group('a.g.lock');
+      card('⚙️', 'jam', 'jammed', a.jammed !== false, (v) => set('jammed', v), 'a.jam', 'a.jam.d', (c) => {
+        c.appendChild(field('a.jamName', input('nk-a-jname', a.jammedName, 'Lock Jammed', (v) => set('jammedName', v))));
+      });
+      card('🔋', 'lbat', 'lock-battery', a.lockBattery !== false, (v) => set('lockBattery', v), 'a.lbat', 'a.lbat.d', (c) => {
+        c.appendChild(field('a.lbatName', input('nk-a-lbname', a.lockBatteryName, 'Lock Battery Low', (v) => set('lockBatteryName', v))));
+        c.appendChild(field('a.lbatPercent', input('nk-a-lbpct', a.lockBatteryPercent ?? 20, '20', (v) => set('lockBatteryPercent', Number(v) || 20), 'number')));
+        c.appendChild(field('a.kbatRepeat', input('nk-a-lbrep', a.lockBatteryRepeatMinutes ?? 120, '120', (v) => set('lockBatteryRepeatMinutes', v === '' ? 120 : Number(v)), 'number')));
+        c.appendChild(toggle('nk-a-lbquiet', a.lockBatteryQuietNight !== false, 'a.kbatQuiet', null, (v) => set('lockBatteryQuietNight', v)));
+      });
+
+      group('a.g.keypad');
+      card('🔢', 'kbat', 'keypad-battery', a.keypadBattery !== false, (v) => set('keypadBattery', v), 'a.kbat', 'a.kbat.d', (c) => {
+        c.appendChild(field('a.kbatName', input('nk-a-kbname', a.keypadBatteryName, 'Keypad Battery Low', (v) => set('keypadBatteryName', v))));
+        c.appendChild(field('a.kbatRepeat', input('nk-a-kbrep', a.keypadBatteryRepeatMinutes ?? 120, '120', (v) => set('keypadBatteryRepeatMinutes', v === '' ? 120 : Number(v)), 'number')));
+        c.appendChild(toggle('nk-a-kbquiet', a.keypadBatteryQuietNight !== false, 'a.kbatQuiet', null, (v) => set('keypadBatteryQuietNight', v)));
+      });
+      card('📱', 'theft', 'keypad-moved', a.keypadMoved === true, (v) => set('keypadMoved', v), 'a.theft', 'a.theft.d', (c) => {
+        c.appendChild(field('a.theftName', input('nk-a-tname', a.keypadMovedName, 'Keypad Moved', (v) => set('keypadMovedName', v))));
+        c.appendChild(field('a.theftMin', input('nk-a-tmin', a.keypadMovedMinutes ?? 5, '5', (v) => set('keypadMovedMinutes', v || 5), 'number')));
+      });
     }
 
     function renderNew() {

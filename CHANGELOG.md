@@ -2,6 +2,14 @@
 
 Every version in English and in Hebrew. The settings page of the plugin shows the latest ones under **What's new**.
 
+## 1.18.0
+
+### English
+- New **"Keypad Battery Low" sensor**: opens when Nuki reports the keypad battery is low and alerts again every hour (a new notification each time) until the batteries are replaced. No repeats at night (23:00–07:00). Minutes, night mode and name are in the settings page, with a test button.
+
+### עברית
+- **חיישן "סוללת הקודן חלשה"** חדש: נפתח כשנוקי מדווחים שהסוללה של הקודן חלשה ומתריע שוב כל שעה (התראה חדשה בכל פעם) עד שמחליפים סוללות. בלילה (23:00–07:00) אין התראות חוזרות. את הדקות, מצב הלילה והשם קובעים בדף ההגדרות, וכולל כפתור בדיקה.
+
 ## 1.17.3
 
 ### English

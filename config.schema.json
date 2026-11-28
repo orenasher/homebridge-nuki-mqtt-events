@@ -400,6 +400,27 @@
                 "title": "Lock-jammed sensor name",
                 "type": "string",
                 "placeholder": "Lock Jammed"
+              },
+              "keypadBattery": {
+                "title": "\"Keypad Battery Low\" sensor",
+                "type": "boolean",
+                "default": true
+              },
+              "keypadBatteryName": {
+                "title": "Keypad-battery sensor name",
+                "type": "string",
+                "placeholder": "Keypad Battery Low"
+              },
+              "keypadBatteryRepeatMinutes": {
+                "title": "Keypad battery: alert again every … minutes (0 = once)",
+                "type": "integer",
+                "minimum": 0,
+                "placeholder": "60"
+              },
+              "keypadBatteryQuietNight": {
+                "title": "Keypad battery: no repeated alerts at night (23:00–07:00)",
+                "type": "boolean",
+                "default": true
               }
             }
           },

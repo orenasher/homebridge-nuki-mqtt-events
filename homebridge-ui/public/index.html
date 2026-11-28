@@ -261,6 +261,7 @@
         'a.theftMin': 'כמה דקות החיישן נשאר פתוח',
         'a.test': 'בדיקת התראות (נשלחת התראה אמיתית ל‑Home ונעלמת אחרי 15 שניות):',
         'a.jam': 'חיישן "המנעול נתקע"', 'a.jam.d': 'נפתח כשהמנעול נתקע ונסגר כשהוא חוזר לעבוד. נוח לאוטומציות (למשל הכרזה ב‑HomePod) — Home מפעיל אוטומציות על חיישן בצורה אמינה יותר מאשר על מצב "נתקע" של המנעול.', 'a.jamName': 'שם החיישן', 'a.test.jam': 'בדיקה: המנעול נתקע',
+        'a.kbat': 'חיישן "סוללת הקודן חלשה"', 'a.kbat.d': 'נפתח כשנוקי מדווחים שהסוללה של הקודן חלשה, ומתריע שוב ושוב עד שמחליפים סוללות.', 'a.kbatName': 'שם החיישן', 'a.kbatRepeat': 'להתריע שוב כל כמה דקות (0 = פעם אחת)', 'a.kbatQuiet': 'בלי התראות חוזרות בלילה (23:00–07:00)', 'a.test.kbat': 'בדיקה: סוללת הקודן',
         'a.test.theft': 'בדיקה: קודן הוזז', 'a.test.forced': 'בדיקה: פריצה', 'a.test.left': 'בדיקה: דלת פתוחה',
         'a.test.sent': 'נשלח. ההתראה תגיע תוך כמה שניות.', 'a.test.fail': 'הבדיקה נכשלה: {msg}',
         'hist.title': 'היסטוריית פתיחות',
@@ -378,6 +379,7 @@
         'a.theftMin': 'Minutes the sensor stays open',
         'a.test': 'Test the alerts (a real notification goes to Home and clears after 15 seconds):',
         'a.jam': '"Lock Jammed" sensor', 'a.jam.d': "Opens when the lock jams and closes when it works again. Handy for automations (e.g. a HomePod announcement) — Home runs automations on a sensor more reliably than on the lock's jammed state.", 'a.jamName': 'Sensor name', 'a.test.jam': 'Test: lock jammed',
+        'a.kbat': '"Keypad Battery Low" sensor', 'a.kbat.d': 'Opens when Nuki reports the keypad battery is low, and alerts again and again until the batteries are replaced.', 'a.kbatName': 'Sensor name', 'a.kbatRepeat': 'Alert again every … minutes (0 = once)', 'a.kbatQuiet': 'No repeated alerts at night (23:00–07:00)', 'a.test.kbat': 'Test: keypad battery',
         'a.test.theft': 'Test: keypad moved', 'a.test.forced': 'Test: forced open', 'a.test.left': 'Test: door left open',
         'a.test.sent': 'Sent. The notification arrives within a few seconds.', 'a.test.fail': 'Test failed: {msg}',
         'hist.title': 'Activity history',
@@ -600,6 +602,13 @@
         box.appendChild(field('a.leftName', input('nk-a-lname', a.leftOpenName, 'Door Left Open', (v) => set('leftOpenName', v))));
       }
       const theftOn = a.keypadMoved === true;
+      const kbatOn = a.keypadBattery !== false;
+      box.appendChild(toggle('nk-a-kbat', kbatOn, 'a.kbat', 'a.kbat.d', async (v) => { await set('keypadBattery', v); renderAlerts(); }));
+      if (kbatOn) {
+        box.appendChild(field('a.kbatName', input('nk-a-kbname', a.keypadBatteryName, 'Keypad Battery Low', (v) => set('keypadBatteryName', v))));
+        box.appendChild(field('a.kbatRepeat', input('nk-a-kbrep', a.keypadBatteryRepeatMinutes ?? 60, '60', (v) => set('keypadBatteryRepeatMinutes', v === '' ? 60 : Number(v)), 'number')));
+        box.appendChild(toggle('nk-a-kbquiet', a.keypadBatteryQuietNight !== false, 'a.kbatQuiet', null, (v) => set('keypadBatteryQuietNight', v)));
+      }
       const jamOn = a.jammed !== false;
       box.appendChild(toggle('nk-a-jam', jamOn, 'a.jam', 'a.jam.d', async (v) => { await set('jammed', v); renderAlerts(); }));
       if (jamOn) box.appendChild(field('a.jamName', input('nk-a-jname', a.jammedName, 'Lock Jammed', (v) => set('jammedName', v))));
@@ -626,6 +635,7 @@
         row.appendChild(b);
       };
       add('jammed', 'a.test.jam', jamOn);
+      add('keypad-battery', 'a.test.kbat', kbatOn);
       add('keypad-moved', 'a.test.theft', theftOn);
       add('forced-open', 'a.test.forced', a.forcedOpen !== false);
       add('left-open', 'a.test.left', leftOn);

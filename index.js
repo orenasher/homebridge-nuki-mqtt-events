@@ -111,7 +111,7 @@ class NukiMqttEvents {
     api.on('shutdown', () => {
       clearTimeout(this.relockTimer);
       clearInterval(this.childPoll);
-      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer); clearInterval(this.peopleTimer); clearInterval(this.activityTimer); clearTimeout(this.theftTimer);
+      clearTimeout(this.codeTimer); clearTimeout(this.codeRetry); clearTimeout(this.leftTimer); clearTimeout(this.leftPulse); clearTimeout(this.statusTimer); clearInterval(this.peopleTimer); clearInterval(this.activityTimer); clearTimeout(this.theftTimer); clearTimeout(this.kbatTimer);
       try { require('fs').unwatchFile(this.testFile()); } catch (e) { /* not watched */ }
       if (this.client) this.client.end(true);
       if (this.broker) this.broker.close();
@@ -356,6 +356,10 @@ class NukiMqttEvents {
       theftName: a.keypadMovedName || 'Keypad Moved',
       theftMin: Number(a.keypadMovedMinutes) || 5,
       jam: a.jammed !== false,
+      kbat: a.keypadBattery !== false,
+      kbatName: a.keypadBatteryName || 'Keypad Battery Low',
+      kbatRepeat: a.keypadBatteryRepeatMinutes === 0 ? 0 : Number(a.keypadBatteryRepeatMinutes) || 60,
+      kbatQuiet: a.keypadBatteryQuietNight !== false,
       jamName: a.jammedName || 'Lock Jammed',
     };
   }
@@ -396,6 +400,7 @@ class NukiMqttEvents {
     if (c.leftMin > 0) ids.push(this.sensorAcc('left-open', c.leftName, 'Door Left Open'));
     if (c.theft) ids.push(this.sensorAcc('keypad-moved', c.theftName, 'Keypad Moved'));
     if (c.jam) ids.push(this.sensorAcc('jammed', c.jamName, 'Lock Jammed'));
+    if (c.kbat) ids.push(this.sensorAcc('keypad-battery', c.kbatName, 'Keypad Battery Low'));
     return ids;
   }
 
@@ -537,8 +542,38 @@ class NukiMqttEvents {
     setTimeout(() => this.setAlert(key, false), 15000);
   }
 
+  // "Keypad Battery Low" sensor: opens while the keypad battery is low and opens again every N minutes
+  // (a new notification each time) until the batteries are replaced. Quiet at night (23:00–07:00).
+  keypadBatteryAlert(low) {
+    if (!this.alertSvc || !this.alertSvc['keypad-battery']) return;
+    const c = this.alertCfg();
+    if (!low) {
+      if (this.kbatActive) this.log.info('Keypad battery OK again — battery alert cleared');
+      this.kbatActive = false;
+      clearTimeout(this.kbatTimer);
+      if (this.alertState['keypad-battery']) this.setAlert('keypad-battery', false);
+      return;
+    }
+    if (this.kbatActive) return;
+    this.kbatActive = true;
+    const unit = this.alertMinuteMs ?? 60000;
+    const quietNow = () => { const h = new Date().getHours(); return c.kbatQuiet && (h >= 23 || h < 7); };
+    const fire = (first) => {
+      if (!this.kbatActive) return;
+      if (!first && quietNow()) { this.kbatTimer = setTimeout(() => fire(false), c.kbatRepeat * unit); return; }
+      this.log.warn('ALERT: the keypad battery is low — replace the keypad batteries');
+      if (this.alertState['keypad-battery']) {
+        this.setAlert('keypad-battery', false);
+        this.kbatPulse = setTimeout(() => this.setAlert('keypad-battery', true), this.alertPulseMs ?? 2000);
+      } else this.setAlert('keypad-battery', true);
+      if (c.kbatRepeat > 0) this.kbatTimer = setTimeout(() => fire(false), c.kbatRepeat * unit);
+    };
+    fire(true);
+  }
+
   onKeypadBattery(raw) {
     const low = ['true', '1'].includes(String(raw).trim().toLowerCase());
+    this.keypadBatteryAlert(low);
     if (low === this.keypadLow && this.keypadAcc && this.keypadAcc.context.low !== undefined) return;
     this.keypadLow = low;
     if (!this.keypadAcc) return;
